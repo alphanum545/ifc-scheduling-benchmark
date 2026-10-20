@@ -93,7 +93,7 @@ def test_plan_skips_runs_already_in_the_store(tmp_path, monkeypatch):
     monkeypatch.setattr(bench, "STORE", store)
     monkeypatch.setattr(bench, "WORK", tmp_path)
     args = type("A", (), dict(set="dev", algos="bdc", suite="all", families="all", tasks="all", qos="all",
-                              reps=2, shards=4, force=False, github_output=None))
+                              reps=2, workers=0, shards=4, force=False, github_output=None))
     bench.cmd_plan(args)
     plan = json.loads((tmp_path / "plan.json").read_text())
     planned = {w["instance_id"] for s in plan["shards"] for w in s}
