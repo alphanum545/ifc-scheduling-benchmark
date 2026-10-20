@@ -1,0 +1,88 @@
+name: Prepare data
+
+# Run once (and again only if manifests/dev-v1.json changes).
+# Regenerates the 160 development instances from the public Dataset repository at the
+# generator commit recorded in the manifest, checks every file byte-for-byte against the
+# frozen SHA-256 values, and publishes them as the release asset data/ifc-dev-v1.zip.
+# The 40 protected holdout instances are never generated.
+
+on:
+  workflow_dispatch:
+    inputs:
+      shards:
+        description: "Parallel machines"
+        default: "20"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prepare-data
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+      commit: ${{ steps.m.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: m
+        run: |
+          python3 -c "import json;print('matrix='+json.dumps(list(range(int('${{ inputs.shards }}')))))" >> "$GITHUB_OUTPUT"
+          python3 -c "import json;print('commit='+json.load(open('manifests/dev-v1.json'))['generator_commit_sha'])" >> "$GITHUB_OUTPUT"
+
+  regen:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      max-parallel: 20
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: regen ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: alphanum545/Dataset
+          ref: ${{ needs.plan.outputs.commit }}
+          path: .dataset
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install --quiet "PyYAML>=6,<7" "jsonschema>=4.23,<5"
+      - name: Regenerate and verify shard ${{ matrix.shard }}
+        run: python3 tools/data.py regen --dataset-repo .dataset --shard ${{ matrix.shard }} --shards ${{ inputs.shards }} --out .work/regen-${{ matrix.shard }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: regen-${{ matrix.shard }}
+          path: .work/regen-${{ matrix.shard }}
+          include-hidden-files: true
+          retention-days: 3
+
+  publish:
+    needs: regen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: regen-*
+          path: .work
+      - name: Pack verified files
+        run: |
+          python3 tools/data.py pack --inputs ".work/regen-*" --out .work/ifc-dev-v1.zip | tee pack.log
+          { echo "## Dataset"; echo '```'; cat pack.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view data >/dev/null 2>&1 || gh release create data --title "Development dataset" \
+            --notes "160 development instances regenerated in CI from alphanum545/Dataset and verified against manifests/dev-v1.json. Holdout not included."
+          gh release upload data .work/ifc-dev-v1.zip --clobber

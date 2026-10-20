@@ -1,0 +1,123 @@
+# Algorithm registry.
+#
+# Each block is one algorithm the benchmark can run. `module`/`class` name a Python class
+# implementing algorithms.common.interface.Scheduler. `sources` lists the files and folders
+# whose bytes define the algorithm: when any of them changes, the algorithm is rerun.
+# `reference` names where the historical (pre-repository) result for this exact version is
+# kept under reference/, so tools/verify_replay.py can check the rerun matches it.
+#
+# role: comparator  = published baseline (adapted to the fixed IFC model; see docs/paper_audits)
+#       proposed    = the DCR line (the paper's method and its history)
+# enabled = false keeps an algorithm out of "all".
+
+[heft-ifc]
+label = "HEFT-IFC"
+module = "algorithms.heft_ifc"
+class = "HeftIFCScheduler"
+role = "comparator"
+sources = ["algorithms/heft_ifc", "algorithms/common", "algorithms/__init__.py"]
+reference = "primary:deterministic_heft_ifc"
+
+[peft-ifc]
+label = "PEFT-IFC"
+module = "algorithms.peft_ifc"
+class = "PeftIFCScheduler"
+role = "comparator"
+sources = ["algorithms/peft_ifc", "algorithms/common", "algorithms/__init__.py"]
+reference = "primary:deterministic_peft_ifc"
+
+[bdheft]
+label = "BDHEFT (a=0.5)"
+module = "algorithms.bdheft"
+class = "BDHEFTScheduler"
+role = "comparator"
+sources = ["algorithms/bdheft", "algorithms/common", "algorithms/__init__.py"]
+reference = "primary:bdheft_ifc_a05"
+
+[dbcs]
+label = "DBCS"
+module = "algorithms.dbcs"
+class = "DBCSScheduler"
+role = "comparator"
+sources = ["algorithms/dbcs", "algorithms/common", "algorithms/__init__.py"]
+reference = "primary:dbcs_ifc"
+
+[bdsd]
+label = "BDSD"
+module = "algorithms.bdsd"
+class = "BDSDScheduler"
+role = "comparator"
+sources = ["algorithms/bdsd", "algorithms/common", "algorithms/__init__.py"]
+reference = "primary:bdsd_ifc"
+
+[bddc]
+label = "BDDC (w=0.5)"
+module = "algorithms.bddc_bdc"
+class = "BDDCScheduler"
+role = "comparator"
+sources = ["algorithms/bddc_bdc", "algorithms/common", "algorithms/__init__.py"]
+reference = "primary:bddc_ifc_w05"
+
+[bdc]
+label = "BDC (w=0.5)"
+module = "algorithms.bddc_bdc"
+class = "BDCScheduler"
+role = "comparator"
+sources = ["algorithms/bddc_bdc", "algorithms/common", "algorithms/__init__.py"]
+reference = ["primary:bdc_ifc_w05", "dcr:bdc_ifc_w05"]
+
+[dcr-v0]
+label = "DCR-v0"
+module = "algorithms.dcr_ifc"
+class = "DCRScheduler"
+role = "proposed"
+sources = ["algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+reference = ["dcr:dcr_ifc_v0", "dcr:dcr_ifc_v0@dev-run"]
+
+[dcr-v0-opt]
+label = "DCR-v0 (optimized)"
+module = "algorithms.dcr_ifc_optimized"
+class = "DCROptimizedScheduler"
+role = "proposed"
+sources = ["algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+reference = "dcr:dcr_ifc_v0_optimized"
+
+[dcr-v1]
+label = "DCR-v1 (full ranking)"
+module = "algorithms.dcr_ifc_v1"
+class = "DCRV1Scheduler"
+role = "proposed"
+sources = ["algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+reference = "dcr:dcr_ifc_v1_arrival"
+
+[dcr-v1-admission]
+label = "DCR-v1 Admission"
+module = "algorithms.dcr_ifc_v1"
+class = "DCRV1AdmissionScheduler"
+role = "proposed"
+sources = ["algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+reference = ["dcr:dcr_ifc_v1_arrival_admission", "core24:dcr-v1-admission"]
+
+[dcr-v3-rescue]
+label = "DCR-v3 Rescue"
+module = "ifc_algorithms.proposed.dcr_v3_rescue"
+class = "DCRV3RescueScheduler"
+role = "proposed"
+sources = ["ifc_algorithms", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+reference = "core24:dcr-v3-rescue"
+
+[dcr-v2-graded]
+label = "DCR-v2 Graded"
+module = "ifc_algorithms.proposed.dcr_v2"
+class = "DCRV2GradedScheduler"
+role = "proposed"
+enabled = false
+sources = ["ifc_algorithms", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+[dcr-v2-sparing]
+label = "DCR-v2 Sparing"
+module = "ifc_algorithms.proposed.dcr_v2"
+class = "DCRV2SparingScheduler"
+role = "proposed"
+enabled = false
+sources = ["ifc_algorithms", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]

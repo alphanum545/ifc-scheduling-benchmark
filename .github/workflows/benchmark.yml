@@ -1,0 +1,147 @@
+name: Benchmark
+
+# Actions tab -> Benchmark -> Run workflow. Only runs not already in results/store.csv are
+# executed (an algorithm reruns automatically when any of its source files change).
+# Results: results/reports/<report_name>/ in the repository, and as a downloadable artifact.
+
+on:
+  workflow_dispatch:
+    inputs:
+      algos:
+        description: "Algorithms (comma-separated IDs from algorithms.toml, or all)"
+        default: "all"
+      highlight:
+        description: "Proposed algorithm to highlight (gains/losses computed against it)"
+        default: "dcr-v1-admission"
+      suite:
+        description: "Cases: smoke (5), core (24) or all (160 development)"
+        default: "all"
+      families:
+        description: "Families, e.g. montage,sipht (or all)"
+        default: "all"
+      tasks:
+        description: "Task counts, e.g. 60,1000 (or all)"
+        default: "all"
+      qos:
+        description: "QoS profiles: relaxed, moderate, tight (or all)"
+        default: "all"
+      reps:
+        description: "Repetitions per run (2 also checks determinism)"
+        default: "2"
+      report_name:
+        description: "Report folder name under results/reports/"
+        default: "latest"
+      shards:
+        description: "Parallel machines (max 20 on a free account)"
+        default: "20"
+      force:
+        description: "Ignore stored results and rerun everything"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bench-store
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      todo: ${{ steps.plan.outputs.todo }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - id: plan
+        name: Plan runs
+        run: |
+          python3 tools/bench.py plan --algos "${{ inputs.algos }}" --suite "${{ inputs.suite }}" \
+            --families "${{ inputs.families }}" --tasks "${{ inputs.tasks }}" --qos "${{ inputs.qos }}" \
+            --reps "${{ inputs.reps }}" --shards "${{ inputs.shards }}" ${{ inputs.force && '--force' || '' }} \
+            --github-output "$GITHUB_OUTPUT" | tee plan.log
+          { echo "## Plan"; echo '```'; cat plan.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plan
+          path: .work/plan.json
+          include-hidden-files: true
+          retention-days: 3
+
+  run:
+    needs: plan
+    if: ${{ needs.plan.outputs.todo != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: shard ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install --quiet -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: .work
+      - name: Download and verify data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/data.py fetch --out data
+      - name: Run shard ${{ matrix.shard }}
+        run: python3 tools/bench.py run --data data --shard ${{ matrix.shard }} --out .work/shard-${{ matrix.shard }}.csv
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: shard-${{ matrix.shard }}
+          path: .work/shard-${{ matrix.shard }}.csv
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 3
+
+  report:
+    needs: [plan, run]
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install --quiet matplotlib openpyxl
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: shard-*
+          path: .work
+          merge-multiple: true
+      - name: Merge results into the store
+        run: python3 tools/bench.py merge --inputs ".work/shard-*.csv"
+      - name: Build report
+        run: |
+          python3 tools/report.py --algos "${{ inputs.algos }}" --highlight "${{ inputs.highlight }}" \
+            --suite "${{ inputs.suite }}" --families "${{ inputs.families }}" --tasks "${{ inputs.tasks }}" \
+            --qos "${{ inputs.qos }}" --name "${{ inputs.report_name }}" > /dev/null
+          cat "results/reports/${{ inputs.report_name }}/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/verify_replay.py --out results/replay.md > /dev/null
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/store.csv results/replay.md "results/reports/${{ inputs.report_name }}"
+          git commit -m "Benchmark results: ${{ inputs.report_name }}" || { echo "nothing new"; exit 0; }
+          for i in 1 2 3; do git pull --rebase && git push && exit 0; sleep 5; done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ inputs.report_name }}
+          path: results/reports/${{ inputs.report_name }}

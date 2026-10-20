@@ -1,0 +1,218 @@
+{
+ "note": "Every algorithm source file in this repository, its SHA-256, and the historical artifact it was copied from without modification.",
+ "origins": {
+  "benchmark-7bcefcf": "Original IFC-Scheduling-Benchmark repository, commit 7bcefcf02642b2a69b2f03f02ca6aaeee3e28f1f (the commit that produced the 1,120-result primary development experiment; identical to the archived build source.zip).",
+  "benchmark-77f76c8": "Same repository, commit 77f76c8bc37b5cd4cab9ab83dacfdef18551f660 (Stage16: adds DCR-v1; descendant of 7bcefcf and 1647777, Stage15 DCR-v0 optimization).",
+  "kiro-2026-09-30": "ifc-scheduling-lab workspace snapshot of 30 Sep 2026, archive SHA-256 db72236c4a93a89241fb4a6d5ee83920e906097b512647af0d49d62eecaaf63e (the source executed by the 15 Oct 2026 DCR-v3 reproduction)."
+ },
+ "files": {
+  "algorithms/__init__.py": {
+   "sha256": "594d61904127674b522c35df422da6f2fb6e81be98343ea457deeaa831dc359e",
+   "origin": "benchmark-7bcefcf algorithms/__init__.py"
+  },
+  "algorithms/bddc_bdc/__init__.py": {
+   "sha256": "5b868eb7b23a6555b9abf827b6c27c8c53a67a459d0d5079cd9e14682bff626c",
+   "origin": "benchmark-7bcefcf algorithms/bddc_bdc/__init__.py"
+  },
+  "algorithms/bddc_bdc/scheduler.py": {
+   "sha256": "5078f599a973e574765d47fef1fc5ac7bde81362634bf1efe84cc683cbf66d62",
+   "origin": "benchmark-7bcefcf algorithms/bddc_bdc/scheduler.py"
+  },
+  "algorithms/bdheft/__init__.py": {
+   "sha256": "a31df3640d10f2a92294e59654f11a0770476a959bac127ad4dd624d984f93fa",
+   "origin": "benchmark-7bcefcf algorithms/bdheft/__init__.py"
+  },
+  "algorithms/bdheft/scheduler.py": {
+   "sha256": "d90312899fa92784264af80cdfa425f0c5b26217e5820c1c34565660da88c9d3",
+   "origin": "benchmark-7bcefcf algorithms/bdheft/scheduler.py"
+  },
+  "algorithms/bdsd/__init__.py": {
+   "sha256": "8ba2abbecab550e240afea2db55c2ba824d7a8a6a4b5b3d6c456e0cd345e82a9",
+   "origin": "benchmark-7bcefcf algorithms/bdsd/__init__.py"
+  },
+  "algorithms/bdsd/scheduler.py": {
+   "sha256": "9ca1104ab23475009ad16b7f367cb5f5a93a81f0ed476b85baf48c747fe7a5c2",
+   "origin": "benchmark-7bcefcf algorithms/bdsd/scheduler.py"
+  },
+  "algorithms/common/__init__.py": {
+   "sha256": "d2a9528d5f266383be9e5acfac80dfe24f1cc055feebec5a92066d112e8b78be",
+   "origin": "benchmark-7bcefcf algorithms/common/__init__.py"
+  },
+  "algorithms/common/dataset_reference.py": {
+   "sha256": "16cb1916c6248974c72ded2641a9da56e0188180c74c168f9adee55242ecea8e",
+   "origin": "benchmark-7bcefcf algorithms/common/dataset_reference.py"
+  },
+  "algorithms/common/interface.py": {
+   "sha256": "7b1802288e48946d88b8ae4a41c2d337a2eebd030d936ae922c2bc7a3ca38bb3",
+   "origin": "benchmark-7bcefcf algorithms/common/interface.py"
+  },
+  "algorithms/common/registry.py": {
+   "sha256": "d0cfea3427bde6d76df13a230d799f697b853ed10807756c493bf3dbfc564cdf",
+   "origin": "benchmark-7bcefcf algorithms/common/registry.py"
+  },
+  "algorithms/common/result.py": {
+   "sha256": "a7abcf0f17c546d920d100fceb6e050ada24cd4ec42bfc6176b42ccc68b12531",
+   "origin": "benchmark-7bcefcf algorithms/common/result.py"
+  },
+  "algorithms/dbcs/__init__.py": {
+   "sha256": "0855054fae0d5dc359ae1d8deaea90c20a39651675696684693f3b3dffedf2ab",
+   "origin": "benchmark-7bcefcf algorithms/dbcs/__init__.py"
+  },
+  "algorithms/dbcs/scheduler.py": {
+   "sha256": "cf41f139f228a8dfe299752d858ccdf9b943d97c78a093d4f956837a17887842",
+   "origin": "benchmark-7bcefcf algorithms/dbcs/scheduler.py"
+  },
+  "algorithms/dcr_ifc/__init__.py": {
+   "sha256": "35580986642b0fa089128aa962d0fadb2137f242352a83e16b3a8f0465462ea8",
+   "origin": "benchmark-7bcefcf algorithms/dcr_ifc/__init__.py"
+  },
+  "algorithms/dcr_ifc/model.py": {
+   "sha256": "aed5cc2b4cea76f2ff18af853c14d46a917aee9416517c2de292bcf50d95a9c3",
+   "origin": "benchmark-7bcefcf algorithms/dcr_ifc/model.py"
+  },
+  "algorithms/dcr_ifc/reserve.py": {
+   "sha256": "cdaf871a35156ccedac263b9063aa1029261fc08a534043460ea694612cc9eee",
+   "origin": "benchmark-7bcefcf algorithms/dcr_ifc/reserve.py"
+  },
+  "algorithms/dcr_ifc/scheduler.py": {
+   "sha256": "2258adcfa8576a97b3f791d66c05648fb33ccbac33bee1c27b96ba6cea5f7dfc",
+   "origin": "benchmark-7bcefcf algorithms/dcr_ifc/scheduler.py"
+  },
+  "algorithms/dcr_ifc/state.py": {
+   "sha256": "7f3c5ee95ad9885cd92793e1f7d2dbcf2e0e91c59996732fc2498fcb545ade2d",
+   "origin": "benchmark-7bcefcf algorithms/dcr_ifc/state.py"
+  },
+  "algorithms/dcr_ifc_optimized/__init__.py": {
+   "sha256": "61d034f2ff3bfa55e529bf942f04f4433725b8ee477144bae9d82ed12437ee8b",
+   "origin": "benchmark-77f76c8 algorithms/dcr_ifc_optimized/__init__.py"
+  },
+  "algorithms/dcr_ifc_optimized/reserve.py": {
+   "sha256": "265a8e2a7a6317764f8f1208c5e7fbb017fea67dfc2d45d0db4737d47ca52bf8",
+   "origin": "benchmark-77f76c8 algorithms/dcr_ifc_optimized/reserve.py"
+  },
+  "algorithms/dcr_ifc_optimized/scheduler.py": {
+   "sha256": "80e677ebee9b2ca19e2c6efe890035acd41a4721a21517deb57d7f8588bee80d",
+   "origin": "benchmark-77f76c8 algorithms/dcr_ifc_optimized/scheduler.py"
+  },
+  "algorithms/dcr_ifc_optimized/state.py": {
+   "sha256": "535170cb7354867a6a2043073407fa465d8911bd0e1d8053fcd74eceaf5056e3",
+   "origin": "benchmark-77f76c8 algorithms/dcr_ifc_optimized/state.py"
+  },
+  "algorithms/dcr_ifc_v1/__init__.py": {
+   "sha256": "6ae96b09848a7008036eaad910a161ed987fe558013364d47b1f2095cd24982a",
+   "origin": "benchmark-77f76c8 algorithms/dcr_ifc_v1/__init__.py"
+  },
+  "algorithms/dcr_ifc_v1/reserve.py": {
+   "sha256": "4fb711e619857d4cdbe7c609f0613177a2bb5a026f1ff31cd38176da9fce045a",
+   "origin": "benchmark-77f76c8 algorithms/dcr_ifc_v1/reserve.py"
+  },
+  "algorithms/dcr_ifc_v1/scheduler.py": {
+   "sha256": "d7ed9a22c78af0f51af7e74e0e49d3e23c25d39e59660c76c2b2cb15e204f52b",
+   "origin": "benchmark-77f76c8 algorithms/dcr_ifc_v1/scheduler.py"
+  },
+  "algorithms/heft_ifc/__init__.py": {
+   "sha256": "734b2b124213c27fc68677e7ba70e6c5ad868652abb82ed2d7e59c601b038054",
+   "origin": "benchmark-7bcefcf algorithms/heft_ifc/__init__.py"
+  },
+  "algorithms/heft_ifc/scheduler.py": {
+   "sha256": "bf53ac399c48aaa2d03c426b6cd5aa9043f2feaad12e563c561ea6d910073cd7",
+   "origin": "benchmark-7bcefcf algorithms/heft_ifc/scheduler.py"
+  },
+  "algorithms/peft_ifc/__init__.py": {
+   "sha256": "5cc29b37a86abc4d5b528ffb2fb58c9bc3874beb73b0ac28b047730a71fb6ce1",
+   "origin": "benchmark-7bcefcf algorithms/peft_ifc/__init__.py"
+  },
+  "algorithms/peft_ifc/scheduler.py": {
+   "sha256": "ee1e881b9ef7a201df06cd8446e235f6cbaf804479720596e290ef2a685a1913",
+   "origin": "benchmark-7bcefcf algorithms/peft_ifc/scheduler.py"
+  },
+  "algorithms/proposed_registry.py": {
+   "sha256": "3f7b1ab718f8c0cb9a3979fe92255c8ec998269eceb988741de889661268119a",
+   "origin": "benchmark-7bcefcf algorithms/proposed_registry.py"
+  },
+  "algorithms/registry.py": {
+   "sha256": "31772c0192345b8f21bee8e6d0d8d5c84e7a8ddccdc963dddd5ab7f381d05a39",
+   "origin": "benchmark-7bcefcf algorithms/registry.py"
+  },
+  "experiment/__init__.py": {
+   "sha256": "fe518edca64d7d74b10d3a353e942379261d2fa2ee481de798144f9be48e2279",
+   "origin": "benchmark-7bcefcf experiment/__init__.py"
+  },
+  "experiment/development_runner.py": {
+   "sha256": "92a3b34fe75118ff0d0bbe095ae5e223e4f1ed58347a6d7e6ed83286a44e2cd5",
+   "origin": "excerpt (constant only) of benchmark-7bcefcf experiment/development_runner.py"
+  },
+  "experiment/evaluator_adapter.py": {
+   "sha256": "17a726fe5b605ba8b99c036bf850ce9e137d65115afaf798d0256f8df9e9c5c7",
+   "origin": "benchmark-7bcefcf experiment/evaluator_adapter.py"
+  },
+  "experiment/result_schema.py": {
+   "sha256": "c79ef96832a8dcd57b0b95a83b696947197e379494043811422583ce7a863872",
+   "origin": "benchmark-7bcefcf experiment/result_schema.py"
+  },
+  "experiment/runner.py": {
+   "sha256": "1559451cfc474dec7785615c92761428459a00e4aae825719ff86b3037d70f36",
+   "origin": "benchmark-7bcefcf experiment/runner.py"
+  },
+  "ifc_algorithms/__init__.py": {
+   "sha256": "cb587d8f593db1270c017a881534c23614bc4f194367edfbc3bc1a5fe73c7f65",
+   "origin": "kiro-2026-09-30 src/ifc_algorithms/__init__.py"
+  },
+  "ifc_algorithms/proposed/__init__.py": {
+   "sha256": "22b4730508b77e01df6cabd73e13fd778b725b96e9a3e6df3b823ae1709059ed",
+   "origin": "kiro-2026-09-30 src/ifc_algorithms/proposed/__init__.py"
+  },
+  "ifc_algorithms/proposed/dcr_v2.py": {
+   "sha256": "811e9ffec7355dc0ffe27016bbd79eace7be81ebd1c24344fa0e25785a73a29b",
+   "origin": "kiro-2026-09-30 src/ifc_algorithms/proposed/dcr_v2.py"
+  },
+  "ifc_algorithms/proposed/dcr_v2_members.py": {
+   "sha256": "5a60f935e1c4b48e1a9e4c6a3af58ef053a4165ed5b0ac63328ba4a2acb81e1a",
+   "origin": "kiro-2026-09-30 src/ifc_algorithms/proposed/dcr_v2_members.py"
+  },
+  "ifc_algorithms/proposed/dcr_v2_rules.py": {
+   "sha256": "a2f2ee4c8c0831fca75e74b4e7bbfee8311330764c24c51158f145ca8ef8ffa1",
+   "origin": "kiro-2026-09-30 src/ifc_algorithms/proposed/dcr_v2_rules.py"
+  },
+  "ifc_algorithms/proposed/dcr_v3_rescue.py": {
+   "sha256": "ef620c890738b391f9805d39993e051e0dc2facade43a1a37228b387d93ec822",
+   "origin": "kiro-2026-09-30 src/ifc_algorithms/proposed/dcr_v3_rescue.py"
+  },
+  "tests/historical/test_bddc_bdc.py": {
+   "sha256": "a8d7ef6f13fcf9fb4a505dfe52fb15ddf4d088c033a6df221e7d0793d452e6a7",
+   "origin": "benchmark-7bcefcf tests/test_bddc_bdc.py"
+  },
+  "tests/historical/test_bdheft.py": {
+   "sha256": "cd0eccfd5af620ed8f5f0ecb40d8e7bd04385f36b6593b8cbec261ab92e00439",
+   "origin": "benchmark-7bcefcf tests/test_bdheft.py"
+  },
+  "tests/historical/test_bdsd.py": {
+   "sha256": "fdc8d0c7702a39d4d8be5999fe52dfb3bfdf33ac832db8d273f38f651672be97",
+   "origin": "benchmark-7bcefcf tests/test_bdsd.py"
+  },
+  "tests/historical/test_contracts.py": {
+   "sha256": "4c52985af73f892810bc7ed624d773e9fc6bbf7b431959619302c6531f57c53f",
+   "origin": "benchmark-7bcefcf tests/test_contracts.py"
+  },
+  "tests/historical/test_dbcs.py": {
+   "sha256": "82b79dbb1e0e82e45968df456dc9eb5fea284295827bc3d7e1e7ee95f51a862e",
+   "origin": "benchmark-7bcefcf tests/test_dbcs.py"
+  },
+  "tests/historical/test_dcr_ifc.py": {
+   "sha256": "6f6fda9b9e89090b4baf716a12ae99cb08c6959244321f206780db66f4817900",
+   "origin": "benchmark-7bcefcf tests/test_dcr_ifc.py"
+  },
+  "tests/historical/test_dcr_optimized.py": {
+   "sha256": "fbe9f20b62fd57731d2fce129e6f4b3dde69b82bd389a7799fc819b0800b88d4",
+   "origin": "benchmark-77f76c8 tests/test_dcr_optimized.py"
+  },
+  "tests/historical/test_dcr_v1.py": {
+   "sha256": "f7b15cc840e24575d4d16f5ae63bf41091fea2257d831c6c6bf96343fcafc0b8",
+   "origin": "benchmark-77f76c8 tests/test_dcr_v1.py"
+  },
+  "tests/historical/test_reference_adapters.py": {
+   "sha256": "17ae5de5cb2eaabb2b03c0ae3854b9a7a31aea76966fbf4e8b0faf31a9a4429e",
+   "origin": "benchmark-7bcefcf tests/test_reference_adapters.py"
+  }
+ }
+}

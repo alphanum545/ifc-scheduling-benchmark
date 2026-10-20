@@ -1,0 +1,7 @@
+.work/
+data/
+*.zip
+__pycache__/
+*.pyc
+.pytest_cache/
+.dataset/

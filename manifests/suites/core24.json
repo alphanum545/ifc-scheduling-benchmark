@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "source_project": "chatgpt-workspace/Dataset",
+  "source_ref": "main",
+  "source_commit": "67489dc2f3009c394a0bc783181612fe6481efaf",
+  "source_selection_id": "pilot-selection-v1",
+  "split": "development",
+  "selection_policy": "deterministic greedy marginal+pairwise coverage; lexical tie-break; slight runtime preference when coverage ties",
+  "holdout_used": false,
+  "suite_id": "ifc-core-dev-v1",
+  "purpose": "Primary champion-challenger development gate; fixed representative subset, not final-paper validation.",
+  "summary": {
+    "count": 24,
+    "family": {
+      "cybershake": 6,
+      "genome": 3,
+      "ligo": 4,
+      "montage": 6,
+      "sipht": 5
+    },
+    "target_task_count": {
+      "60": 3,
+      "100": 4,
+      "200": 3,
+      "400": 3,
+      "600": 3,
+      "800": 4,
+      "1000": 4
+    },
+    "replicate_id": {
+      "r01": 8,
+      "r02": 8,
+      "r03": 8
+    },
+    "resource_scale": {
+      "S01": 9,
+      "S02": 8,
+      "S03": 7
+    },
+    "scenario_profile": {
+      "balanced": 7,
+      "compute_constrained": 9,
+      "network_constrained": 8
+    },
+    "qos_profile": {
+      "moderate": 8,
+      "relaxed": 7,
+      "tight": 9
+    }
+  },
+  "entries": [
+    {
+      "candidate_id": "candidate-v1-draft-wf-cybershake-0060-r01-91ded9b3c5de-s02-compute_constrained-seed101-moderate",
+      "family": "cybershake",
+      "target_task_count": 60,
+      "replicate_id": "r01",
+      "resource_scale": "S02",
+      "scenario_profile": "compute_constrained",
+      "qos_profile": "moderate",
+      "ifc_realization_seed": 101
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-genome-0100-r02-73a3e5aef220-s01-network_constrained-seed202-tight",
+      "family": "genome",
+      "target_task_count": 100,
+      "replicate_id": "r02",
+      "resource_scale": "S01",
+      "scenario_profile": "network_constrained",
+      "qos_profile": "tight",
+      "ifc_realization_seed": 202
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-montage-0400-r03-fbfdb1f0477f-s03-network_constrained-seed303-relaxed",
+      "family": "montage",
+      "target_task_count": 400,
+      "replicate_id": "r03",
+      "resource_scale": "S03",
+      "scenario_profile": "network_constrained",
+      "qos_profile": "relaxed",
+      "ifc_realization_seed": 303
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-sipht-0600-r01-b90c6ca8a311-s02-balanced-seed101-tight",
+      "family": "sipht",
+      "target_task_count": 600,
+      "replicate_id": "r01",
+      "resource_scale": "S02",
+      "scenario_profile": "balanced",
+      "qos_profile": "tight",
+      "ifc_realization_seed": 101
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-ligo-1000-r02-5eca314e8549-s03-compute_constrained-seed202-relaxed",
+      "family": "ligo",
+      "target_task_count": 1000,
+      "replicate_id": "r02",
+      "resource_scale": "S03",
+      "scenario_profile": "compute_constrained",
+      "qos_profile": "relaxed",
+      "ifc_realization_seed": 202
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-cybershake-0200-r03-7163880d3da3-s01-compute_constrained-seed303-tight",
+      "family": "cybershake",
+      "target_task_count": 200,
+      "replicate_id": "r03",
+      "resource_scale": "S01",
+      "scenario_profile": "compute_constrained",
+      "qos_profile": "tight",
+      "ifc_realization_seed": 303
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-cybershake-0800-r02-2b5d96919e69-s01-balanced-seed202-relaxed",
+      "family": "cybershake",
+      "target_task_count": 800,
+      "replicate_id": "r02",
+      "resource_scale": "S01",
+      "scenario_profile": "balanced",
+      "qos_profile": "relaxed",
+      "ifc_realization_seed": 202
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-genome-1000-r03-bf06690108c5-s02-balanced-seed303-moderate",
+      "family": "genome",
+      "target_task_count": 1000,
+      "replicate_id": "r03",
+      "resource_scale": "S02",
+      "scenario_profile": "balanced",
+      "qos_profile": "moderate",
+      "ifc_realization_seed": 303
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-ligo-0200-r01-2884ab7d4d5b-s01-network_constrained-seed101-moderate",
+      "family": "ligo",
+      "target_task_count": 200,
+      "replicate_id": "r01",
+      "resource_scale": "S01",
+      "scenario_profile": "network_constrained",
+      "qos_profile": "moderate",
+      "ifc_realization_seed": 101
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-montage-0100-r01-77cc174a267a-s03-compute_constrained-seed101-moderate",
+      "family": "montage",
+      "target_task_count": 100,
+      "replicate_id": "r01",
+      "resource_scale": "S03",
+      "scenario_profile": "compute_constrained",
+      "qos_profile": "moderate",
+      "ifc_realization_seed": 101
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-sipht-0400-r02-b8925dadee9f-s02-compute_constrained-seed202-moderate",
+      "family": "sipht",
+      "target_task_count": 400,
+      "replicate_id": "r02",
+      "resource_scale": "S02",
+      "scenario_profile": "compute_constrained",
+      "qos_profile": "moderate",
+      "ifc_realization_seed": 202
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-montage-0060-r02-ccb997b6fb13-s01-balanced-seed202-tight",
+      "family": "montage",
+      "target_task_count": 60,
+      "replicate_id": "r02",
+      "resource_scale": "S01",
+      "scenario_profile": "balanced",
+      "qos_profile": "tight",
+      "ifc_realization_seed": 202
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-sipht-0100-r03-986214f35231-s02-network_constrained-seed303-relaxed",
+      "family": "sipht",
+      "target_task_count": 100,
+      "replicate_id": "r03",
+      "resource_scale": "S02",
+      "scenario_profile": "network_constrained",
+      "qos_profile": "relaxed",
+      "ifc_realization_seed": 303
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-genome-0800-r01-51eb6a8d9d5a-s03-compute_constrained-seed101-relaxed",
+      "family": "genome",
+      "target_task_count": 800,
+      "replicate_id": "r01",
+      "resource_scale": "S03",
+      "scenario_profile": "compute_constrained",
+      "qos_profile": "relaxed",
+      "ifc_realization_seed": 101
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-ligo-0100-r01-ebd4a4f2b27d-s03-balanced-seed101-tight",
+      "family": "ligo",
+      "target_task_count": 100,
+      "replicate_id": "r01",
+      "resource_scale": "S03",
+      "scenario_profile": "balanced",
+      "qos_profile": "tight",
+      "ifc_realization_seed": 101
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-cybershake-0600-r01-540d4f8229cc-s03-network_constrained-seed101-relaxed",
+      "family": "cybershake",
+      "target_task_count": 600,
+      "replicate_id": "r01",
+      "resource_scale": "S03",
+      "scenario_profile": "network_constrained",
+      "qos_profile": "relaxed",
+      "ifc_realization_seed": 101
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-ligo-0800-r03-b7b972b390e3-s02-compute_constrained-seed303-moderate",
+      "family": "ligo",
+      "target_task_count": 800,
+      "replicate_id": "r03",
+      "resource_scale": "S02",
+      "scenario_profile": "compute_constrained",
+      "qos_profile": "moderate",
+      "ifc_realization_seed": 303
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-sipht-0060-r02-4c4a63ee37e4-s03-network_constrained-seed202-relaxed",
+      "family": "sipht",
+      "target_task_count": 60,
+      "replicate_id": "r02",
+      "resource_scale": "S03",
+      "scenario_profile": "network_constrained",
+      "qos_profile": "relaxed",
+      "ifc_realization_seed": 202
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-montage-0200-r02-6090ff36c0ed-s02-balanced-seed202-tight",
+      "family": "montage",
+      "target_task_count": 200,
+      "replicate_id": "r02",
+      "resource_scale": "S02",
+      "scenario_profile": "balanced",
+      "qos_profile": "tight",
+      "ifc_realization_seed": 202
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-montage-0600-r03-771cd2de66d4-s01-compute_constrained-seed303-moderate",
+      "family": "montage",
+      "target_task_count": 600,
+      "replicate_id": "r03",
+      "resource_scale": "S01",
+      "scenario_profile": "compute_constrained",
+      "qos_profile": "moderate",
+      "ifc_realization_seed": 303
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-cybershake-1000-r01-7fdbe67f1021-s01-network_constrained-seed101-moderate",
+      "family": "cybershake",
+      "target_task_count": 1000,
+      "replicate_id": "r01",
+      "resource_scale": "S01",
+      "scenario_profile": "network_constrained",
+      "qos_profile": "moderate",
+      "ifc_realization_seed": 101
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-cybershake-0400-r03-5821f28ac9a1-s02-balanced-seed303-tight",
+      "family": "cybershake",
+      "target_task_count": 400,
+      "replicate_id": "r03",
+      "resource_scale": "S02",
+      "scenario_profile": "balanced",
+      "qos_profile": "tight",
+      "ifc_realization_seed": 303
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-montage-0800-r03-d5058e225fd7-s01-network_constrained-seed303-tight",
+      "family": "montage",
+      "target_task_count": 800,
+      "replicate_id": "r03",
+      "resource_scale": "S01",
+      "scenario_profile": "network_constrained",
+      "qos_profile": "tight",
+      "ifc_realization_seed": 303
+    },
+    {
+      "candidate_id": "candidate-v1-draft-wf-sipht-1000-r02-27d87002acb5-s01-compute_constrained-seed202-tight",
+      "family": "sipht",
+      "target_task_count": 1000,
+      "replicate_id": "r02",
+      "resource_scale": "S01",
+      "scenario_profile": "compute_constrained",
+      "qos_profile": "tight",
+      "ifc_realization_seed": 202
+    }
+  ]
+}
