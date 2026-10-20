@@ -87,13 +87,19 @@ def load_scheduler(spec: dict):
 
 
 # --------------------------------------------------------------------------- instances
-def manifest() -> dict:
-    return json.loads((ROOT / "manifests" / "dev-v1.json").read_text(encoding="utf-8"))
+SET_MANIFESTS = {"dev": "dev-v1.json", "expansion": "expansion-v1.json"}
+
+
+def manifest(set_name: str = "dev") -> dict:
+    return json.loads((ROOT / "manifests" / SET_MANIFESTS[set_name]).read_text(encoding="utf-8"))
 
 
 def select_instances(a: argparse.Namespace) -> list[dict]:
-    entries = manifest()["entries"]
+    set_name = getattr(a, "set", "dev") or "dev"
+    entries = manifest(set_name)["entries"]
     if a.suite in ("smoke", "core"):
+        if set_name != "dev":
+            raise SystemExit("--suite smoke/core is defined for the dev set only; use --suite all")
         suite = json.loads((ROOT / "manifests" / "suites" / f"{'smoke5' if a.suite == 'smoke' else 'core24'}.json").read_text())
         ids = {e["candidate_id"] for e in suite["entries"]}
         entries = [e for e in entries if e["instance_id"] in ids]
@@ -147,10 +153,11 @@ def cmd_plan(a: argparse.Namespace) -> int:
         buckets[i].append(w)
         loads[i] += w["tasks"] ** 1.6 * len(w["algos"])
     WORK.mkdir(exist_ok=True)
-    plan = {"reps": a.reps, "algos": algos, "shards": buckets,
+    plan = {"set": a.set, "reps": a.reps, "algos": algos, "shards": buckets,
             "sources": {n: reg[n]["source_sha256"] for n in algos}}
     (WORK / "plan.json").write_text(json.dumps(plan, indent=1))
     runs = sum(len(w["algos"]) for w in work)
+    print(f"set        : {a.set}")
     print(f"algorithms : {', '.join(algos)}")
     print(f"instances  : {len(instances)} selected, {len(work)} with work to do")
     print(f"runs       : {runs} new algorithm x instance runs, {a.reps} repetition(s) each, {shards} shard(s)")
@@ -196,7 +203,7 @@ def cmd_run(a: argparse.Namespace) -> int:
     plan = json.loads((WORK / "plan.json").read_text())
     if plan["sources"] != {n: reg[n]["source_sha256"] for n in plan["algos"]}:
         raise SystemExit("algorithm sources changed since the plan was made; re-plan")
-    man = manifest()
+    man = manifest(plan.get("set", "dev"))
     entries = {e["instance_id"]: e for e in man["entries"]}
     bases = {b["base_instance_id"]: b for b in man["base_entries"]}
     data = Path(a.data)
@@ -280,7 +287,9 @@ def main() -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     pl = sub.add_parser("plan")
     pl.add_argument("--algos", default="all")
-    pl.add_argument("--suite", default="all", help="smoke (5), core (24) or all (160 development cases)")
+    pl.add_argument("--set", default="dev", choices=sorted(SET_MANIFESTS),
+                    help="dev (160 pilot development cases) or expansion (1,890 frozen expansion cases)")
+    pl.add_argument("--suite", default="all", help="dev set only: smoke (5), core (24) or all (160)")
     pl.add_argument("--families", default="all")
     pl.add_argument("--tasks", default="all")
     pl.add_argument("--qos", default="all")

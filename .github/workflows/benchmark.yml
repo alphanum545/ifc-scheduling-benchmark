@@ -13,8 +13,13 @@ on:
       highlight:
         description: "Proposed algorithm to highlight (gains/losses computed against it)"
         default: "dcr-v1-admission"
+      set:
+        description: "Instance set: dev (160 pilot development) or expansion (1,890)"
+        default: "dev"
+        type: choice
+        options: [dev, expansion]
       suite:
-        description: "Cases: smoke (5), core (24) or all (160 development)"
+        description: "dev set only: smoke (5), core (24) or all (160). Use all for expansion"
         default: "all"
       families:
         description: "Families, e.g. montage,sipht (or all)"
@@ -60,7 +65,7 @@ jobs:
       - id: plan
         name: Plan runs
         run: |
-          python3 tools/bench.py plan --algos "${{ inputs.algos }}" --suite "${{ inputs.suite }}" \
+          python3 tools/bench.py plan --set "${{ inputs.set }}" --algos "${{ inputs.algos }}" --suite "${{ inputs.suite }}" \
             --families "${{ inputs.families }}" --tasks "${{ inputs.tasks }}" --qos "${{ inputs.qos }}" \
             --reps "${{ inputs.reps }}" --shards "${{ inputs.shards }}" ${{ inputs.force && '--force' || '' }} \
             --github-output "$GITHUB_OUTPUT" | tee plan.log
@@ -96,9 +101,9 @@ jobs:
       - name: Download and verify data
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 tools/data.py fetch --out data
+        run: python3 tools/data.py fetch --set ${{ inputs.set }} --out data/${{ inputs.set }}
       - name: Run shard ${{ matrix.shard }}
-        run: python3 tools/bench.py run --data data --shard ${{ matrix.shard }} --out .work/shard-${{ matrix.shard }}.csv
+        run: python3 tools/bench.py run --data data/${{ inputs.set }} --shard ${{ matrix.shard }} --out .work/shard-${{ matrix.shard }}.csv
       - uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
@@ -128,7 +133,7 @@ jobs:
         run: python3 tools/bench.py merge --inputs ".work/shard-*.csv"
       - name: Build report
         run: |
-          python3 tools/report.py --algos "${{ inputs.algos }}" --highlight "${{ inputs.highlight }}" \
+          python3 tools/report.py --set "${{ inputs.set }}" --algos "${{ inputs.algos }}" --highlight "${{ inputs.highlight }}" \
             --suite "${{ inputs.suite }}" --families "${{ inputs.families }}" --tasks "${{ inputs.tasks }}" \
             --qos "${{ inputs.qos }}" --name "${{ inputs.report_name }}" > /dev/null
           cat "results/reports/${{ inputs.report_name }}/summary.md" >> "$GITHUB_STEP_SUMMARY"

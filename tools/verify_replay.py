@@ -8,6 +8,8 @@ They are kept under reference/:
   primary-1120.jsonl  the 160-case x 7-comparator development experiment
   dcr-stored.json     per-instance DCR results (Stage15/16 symmetric runs, the DCR-v0
                       development run, and the 15 Oct 2026 24-case DCR-v1/v3 reproduction)
+  expansion-1890-results.jsonl.gz
+                      the full-eight-20261016 run: 1,890 expansion instances x 8 algorithms
 
 For every store row whose algorithm names a reference, each outcome field present in the
 reference is compared for exact equality. Runtimes are environment-dependent and are not
@@ -44,6 +46,13 @@ def load_references() -> dict[str, dict[str, dict]]:
     for line in open(ROOT / "reference" / "primary-1120.jsonl", encoding="utf-8"):
         r = json.loads(line)
         refs[f"primary:{r['algorithm_id']}"][r["instance_id"]] = r
+    exp = ROOT / "reference" / "expansion-1890-results.jsonl.gz"
+    if exp.exists():
+        import gzip
+        with gzip.open(exp, "rt", encoding="utf-8") as fh:
+            for line in fh:
+                r = json.loads(line)
+                refs[f"expansion:{r['algorithm_id']}"][r["candidate_id"]] = r
     for key, rows in json.load(open(ROOT / "reference" / "dcr-stored.json", encoding="utf-8")).items():
         name, _, tag = key.partition("@")
         prefix = "core24" if tag == "core24" else "dcr"

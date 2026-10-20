@@ -70,6 +70,7 @@ def main() -> int:
     p.add_argument("--algos", default="all")
     p.add_argument("--highlight", default="dcr-v1-admission")
     p.add_argument("--baseline", default="bdc", help="runtime ratios are paired against this algorithm")
+    p.add_argument("--set", default="dev", choices=["dev", "expansion"])
     p.add_argument("--suite", default="all")
     p.add_argument("--families", default="all")
     p.add_argument("--tasks", default="all")
@@ -98,7 +99,7 @@ def main() -> int:
     N = len(common)
     lab = {n: reg[n]["label"] for n in algos}
     md = [f"# Report: {a.name}", "",
-          f"Algorithms: {', '.join(lab[n] for n in algos)}. Highlight: {lab.get(hl, 'none')}. "
+          f"Instance set: **{a.set}**. Algorithms: {', '.join(lab[n] for n in algos)}. Highlight: {lab.get(hl, 'none')}. "
           f"Cases: {len(wanted)} selected, **{N} compared** (every selected algorithm valid and deterministic).", ""]
 
     # ---- validity

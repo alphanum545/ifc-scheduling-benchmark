@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
-"""Rebuild, verify, pack and fetch the 160-case IFC development dataset.
+"""Rebuild, verify, pack and fetch the benchmark instance sets.
 
-The public repository ships no instance files. The development split is regenerated
-from the public Dataset repository (alphanum545/Dataset) at the generator commit
-recorded in manifests/dev-v1.json, and every file is checked byte-for-byte against
-the SHA-256 recorded in that manifest. The 40 protected holdout instances are never
-generated: only development entries are listed in the manifest.
+Two sets are defined, each by a manifest that lists every instance and base file with
+its SHA-256:
 
-  python3 tools/data.py regen --dataset-repo ../Dataset --shard 0 --shards 20 --out .work/regen-0
-  python3 tools/data.py pack  --inputs ".work/regen-*" --out .work/ifc-dev-v1.zip
-  python3 tools/data.py fetch --out data            # download the release asset and verify
-  python3 tools/data.py verify --data data          # re-check an extracted copy
+  dev        manifests/dev-v1.json        160 development instances of the 200-input pilot
+  expansion  manifests/expansion-v1.json  1,890 instances (630 new base configurations x 3 QoS)
+                                           of the frozen ifc-expansion-selection-v1 cohort
+
+The public repository ships no instance files. Each set is regenerated from the public
+Dataset repository (alphanum545/Dataset) at the generator commit recorded in its manifest
+and checked against the frozen hashes:
+  dev        byte-identical files (sha256)
+  expansion  identical content (content_sha256 = sha256 of generator.canonical.canonical_json_bytes),
+             because the frozen expansion files were written with a different JSON layout
+The 40 protected holdout instances of the pilot are in neither manifest and are never generated.
+
+  python3 tools/data.py regen  --set dev --dataset-repo ../Dataset --shard 0 --shards 20 --out .work/regen-0
+  python3 tools/data.py pack   --set dev --inputs ".work/regen-*" --out .work/ifc-dev-v1.zip
+  python3 tools/data.py fetch  --set dev --out data/dev          # download the release asset and verify
+  python3 tools/data.py verify --set dev --data data/dev
 """
 from __future__ import annotations
 
@@ -26,25 +35,34 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "manifests" / "dev-v1.json"
-ASSET = "ifc-dev-v1.zip"
+SETS = {
+    "dev": {"manifest": "dev-v1.json", "asset": "ifc-dev-v1.zip", "check": "sha256"},
+    "expansion": {"manifest": "expansion-v1.json", "asset": "ifc-expansion-v1.zip", "check": "content_sha256"},
+}
 RELEASE_TAG = "data"
 FIXED_TIME = (2026, 9, 6, 0, 0, 0)  # deterministic zip member timestamps
 
 
-def manifest() -> dict:
-    return json.loads(MANIFEST.read_text(encoding="utf-8"))
+def manifest(set_name: str = "dev") -> dict:
+    return json.loads((ROOT / "manifests" / SETS[set_name]["manifest"]).read_text(encoding="utf-8"))
 
 
 def sha(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
-def expected_files(man: dict) -> dict[str, str]:
-    """path (relative to the dataset root) -> sha256, for every instance and base file."""
-    out = {e["path"]: e["sha256"] for e in man["entries"]}
-    out.update({b["path"]: b["sha256"] for b in man["base_entries"]})
+def expected_files(man: dict, check: str = "sha256") -> dict[str, str]:
+    """path (relative to the dataset root) -> expected digest, for every instance and base file."""
+    out = {e["path"]: e[check] for e in man["entries"]}
+    out.update({b["path"]: b[check] for b in man["base_entries"]})
     return out
+
+
+def digest(b: bytes, check: str) -> str:
+    if check == "sha256":
+        return sha(b)
+    from generator.canonical import canonical_json_bytes  # needs the Dataset package on sys.path
+    return sha(canonical_json_bytes(json.loads(b)))
 
 
 # --------------------------------------------------------------------------- regen
@@ -67,6 +85,17 @@ def shard_groups(man: dict, shards: int) -> list[list[tuple[str, list[dict]]]]:
     return out
 
 
+def _selection_entries(a: argparse.Namespace, ds: Path, man: dict) -> dict[str, dict]:
+    """Return candidate_id -> selection entry carrying the fields build_qos_instance needs."""
+    if a.set == "dev":
+        selection = json.loads((ds / "manifests" / "pilot-selection-v1.json").read_text(encoding="utf-8"))
+        if selection["content_sha256"] != man["selection_sha256"]:
+            raise SystemExit("pilot selection checksum does not match the manifest")
+        return {s["candidate_id"]: s for s in selection["entries"]}
+    # expansion: the manifest itself carries the frozen selection entries
+    return {e["candidate_id"]: e for e in man["entries"]}
+
+
 def cmd_regen(a: argparse.Namespace) -> int:
     ds = Path(a.dataset_repo).resolve()
     sys.path.insert(0, str(ds))
@@ -75,32 +104,30 @@ def cmd_regen(a: argparse.Namespace) -> int:
     from generator.instance import build_base_instance  # noqa: E402
     import generator.materialize as M  # noqa: E402
 
-    man = manifest()
+    man = manifest(a.set)
+    check = SETS[a.set]["check"]
     head = subprocess.run(["git", "-C", str(ds), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     if head and head != man["generator_commit_sha"] and not a.allow_other_commit:
         print(f"Dataset checkout is {head}, manifest needs {man['generator_commit_sha']}", file=sys.stderr)
         return 2
     cfg = load_config(str(ds / "config" / "benchmark-v1.yaml"))
-    selection = json.loads((ds / "manifests" / "pilot-selection-v1.json").read_text(encoding="utf-8"))
-    if selection["content_sha256"] != man["selection_sha256"]:
-        print("pilot selection checksum does not match the manifest", file=sys.stderr)
-        return 2
-    sel = {s["candidate_id"]: s for s in selection["entries"]}
-    want = expected_files(man)
+    sel = _selection_entries(a, ds, man)
+    want = expected_files(man, check)
     out = Path(a.out)
     groups = shard_groups(man, a.shards)[a.shard]
-    print(f"shard {a.shard}/{a.shards}: {len(groups)} base instances, {sum(len(g) for _, g in groups)} QoS instances")
+    print(f"set {a.set}, shard {a.shard}/{a.shards}: {len(groups)} base instances, "
+          f"{sum(len(g) for _, g in groups)} QoS instances, checked by {check}")
     bad = 0
     for base_id, group in groups:
         t0 = time.time()
         s0 = sel[group[0]["candidate_id"]]
-        if s0["split"] != "development":
-            raise SystemExit("refusing to materialize a non-development entry")
-        wf = normalize_dax(
-            M._safe_source(ds / "source_workflows", s0["source_path"]),
-            family=s0["family"], target_task_count=int(s0["target_task_count"]),
-            replicate_id=s0["replicate_id"], reference_mips=int(cfg["workflows"]["reference_mips"]),
-        )
+        if s0["split"] not in ("development", "expansion_evaluation"):
+            raise SystemExit("refusing to materialize a protected (holdout) entry")
+        source = M._safe_source(ds / "source_workflows", s0["source_path"])
+        if sha(source.read_bytes()) != s0["source_sha256"]:
+            raise SystemExit(f"source workflow checksum mismatch for {s0['source_path']}")
+        wf = normalize_dax(source, family=s0["family"], target_task_count=int(s0["target_task_count"]),
+                           replicate_id=s0["replicate_id"], reference_mips=int(cfg["workflows"]["reference_mips"]))
         base = build_base_instance(wf, dict(cfg), scale=s0["resource_scale"],
                                    scenario=s0["scenario_profile"], seed=int(s0["ifc_realization_seed"]))
         if base["metadata"]["base_instance_id"] != base_id:
@@ -109,13 +136,16 @@ def cmd_regen(a: argparse.Namespace) -> int:
         files = {f"base/{base_id}.json": M._json_file_bytes(base)}
         for e in group:
             files[e["path"]] = M._json_file_bytes(M.build_qos_instance(sel[e["candidate_id"]], cal, cfg))
+        mism = 0
         for rel, b in files.items():
-            ok = sha(b) == want[rel]
-            bad += not ok
+            ok = digest(b, check) == want[rel]
+            mism += not ok
             p = out / rel
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes(b)
-        print(f"  {base_id}: {len(group)} QoS, {time.time() - t0:.1f}s, {'ok' if bad == 0 else 'MISMATCH'}")
+        bad += mism
+        print(f"  {base_id}: {len(group)} QoS, {time.time() - t0:.1f}s, {'ok' if mism == 0 else f'{mism} MISMATCH'}",
+              flush=True)
     if bad:
         print(f"{bad} regenerated files differ from the frozen hashes", file=sys.stderr)
         return 1
@@ -123,19 +153,21 @@ def cmd_regen(a: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- pack / verify
-def verify_tree(root: Path) -> list[str]:
+def verify_tree(root: Path, set_name: str) -> list[str]:
+    check = SETS[set_name]["check"]
     problems = []
-    for rel, digest in expected_files(manifest()).items():
+    for rel, d in expected_files(manifest(set_name), check).items():
         p = root / rel
         if not p.exists():
             problems.append(f"missing {rel}")
-        elif sha(p.read_bytes()) != digest:
+        elif digest(p.read_bytes(), check) != d:
             problems.append(f"hash mismatch {rel}")
     return problems
 
 
 def cmd_pack(a: argparse.Namespace) -> int:
-    want = expected_files(manifest())
+    check = SETS[a.set]["check"]
+    want = expected_files(manifest(a.set), check)
     found: dict[str, bytes] = {}
     for d in sorted(glob.glob(a.inputs)):
         for rel in want:
@@ -143,15 +175,15 @@ def cmd_pack(a: argparse.Namespace) -> int:
             if p.exists():
                 found[rel] = p.read_bytes()
     problems = [f"missing {r}" for r in want if r not in found]
-    problems += [f"hash mismatch {r}" for r, b in found.items() if sha(b) != want[r]]
+    problems += [f"hash mismatch {r}" for r, b in found.items() if digest(b, check) != want[r]]
     if problems:
         print("\n".join(problems[:20]), file=sys.stderr)
         return 1
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-        info = zipfile.ZipInfo("manifest.json", FIXED_TIME)
-        z.writestr(info, MANIFEST.read_bytes(), zipfile.ZIP_DEFLATED)
+        z.writestr(zipfile.ZipInfo("manifest.json", FIXED_TIME),
+                   (ROOT / "manifests" / SETS[a.set]["manifest"]).read_bytes(), zipfile.ZIP_DEFLATED)
         for rel in sorted(found):
             z.writestr(zipfile.ZipInfo(rel, FIXED_TIME), found[rel], zipfile.ZIP_DEFLATED)
     print(f"packed {len(found)} verified files -> {out} ({out.stat().st_size / 1e6:.1f} MB, sha256 {sha(out.read_bytes())})")
@@ -159,25 +191,27 @@ def cmd_pack(a: argparse.Namespace) -> int:
 
 
 def cmd_verify(a: argparse.Namespace) -> int:
-    problems = verify_tree(Path(a.data))
-    print("\n".join(problems[:20]) if problems else f"all {len(expected_files(manifest()))} files verified")
+    problems = verify_tree(Path(a.data), a.set)
+    n = len(expected_files(manifest(a.set)))
+    print("\n".join(problems[:20]) if problems else f"all {n} files of set {a.set} verified")
     return 1 if problems else 0
 
 
 def cmd_fetch(a: argparse.Namespace) -> int:
     out = Path(a.out)
-    if not verify_tree(out):
-        print(f"{out} already holds the verified development dataset")
+    if out.exists() and not verify_tree(out, a.set):
+        print(f"{out} already holds the verified {a.set} dataset")
         return 0
     out.mkdir(parents=True, exist_ok=True)
-    zpath = out.parent / ASSET
+    asset = SETS[a.set]["asset"]
+    zpath = out.parent / asset
     if not zpath.exists():
         repo = a.repo or os.environ.get("GITHUB_REPOSITORY", "alphanum545/ifc-scheduling-benchmark")
-        subprocess.run(["gh", "release", "download", RELEASE_TAG, "--repo", repo, "--pattern", ASSET,
+        subprocess.run(["gh", "release", "download", RELEASE_TAG, "--repo", repo, "--pattern", asset,
                         "--dir", str(out.parent), "--clobber"], check=True)
     with zipfile.ZipFile(zpath) as z:
         z.extractall(out)
-    return cmd_verify(argparse.Namespace(data=str(out)))
+    return cmd_verify(argparse.Namespace(data=str(out), set=a.set))
 
 
 def main() -> int:
@@ -193,10 +227,12 @@ def main() -> int:
     k.add_argument("--inputs", required=True)
     k.add_argument("--out", required=True)
     v = sub.add_parser("verify")
-    v.add_argument("--data", default="data")
+    v.add_argument("--data", default="data/dev")
     f = sub.add_parser("fetch")
-    f.add_argument("--out", default="data")
+    f.add_argument("--out", default="data/dev")
     f.add_argument("--repo")
+    for s in (r, k, v, f):
+        s.add_argument("--set", choices=sorted(SETS), default="dev")
     a = p.parse_args()
     return {"regen": cmd_regen, "pack": cmd_pack, "verify": cmd_verify, "fetch": cmd_fetch}[a.cmd](a)
 

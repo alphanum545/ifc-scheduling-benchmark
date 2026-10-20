@@ -92,9 +92,24 @@ def test_plan_skips_runs_already_in_the_store(tmp_path, monkeypatch):
                         "status": "ok", "reps": 2}], store)
     monkeypatch.setattr(bench, "STORE", store)
     monkeypatch.setattr(bench, "WORK", tmp_path)
-    args = type("A", (), dict(algos="bdc", suite="all", families="all", tasks="all", qos="all",
+    args = type("A", (), dict(set="dev", algos="bdc", suite="all", families="all", tasks="all", qos="all",
                               reps=2, shards=4, force=False, github_output=None))
     bench.cmd_plan(args)
     plan = json.loads((tmp_path / "plan.json").read_text())
     planned = {w["instance_id"] for s in plan["shards"] for w in s}
     assert inst not in planned and len(planned) == 159
+
+
+def test_expansion_manifest_is_disjoint_from_the_pilot_development_set():
+    dev, exp = data.manifest("dev"), data.manifest("expansion")
+    assert exp["instance_count"] == 1890 and len(exp["entries"]) == 1890
+    assert all(e["split"] == "expansion_evaluation" for e in exp["entries"])
+    assert not {e["instance_id"] for e in exp["entries"]} & {e["instance_id"] for e in dev["entries"]}
+    assert not {b["base_instance_id"] for b in exp["base_entries"]} & {b["base_instance_id"] for b in dev["base_entries"]}
+    assert {e["base_instance_id"] for e in exp["entries"]} == {b["base_instance_id"] for b in exp["base_entries"]}
+
+
+def test_expansion_reference_covers_every_instance_for_eight_algorithms():
+    refs = verify_replay.load_references()
+    exp = [k for k in refs if k.startswith("expansion:")]
+    assert len(exp) == 8 and all(len(refs[k]) == 1890 for k in exp)

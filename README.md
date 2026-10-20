@@ -17,11 +17,21 @@ tables and paper-ready figures.
 
 ---
 
+## Instance sets
+
+| Set | Manifest | Instances | What it is |
+|---|---|---:|---|
+| `dev` | `manifests/dev-v1.json` | 160 | development split of the 200-input pilot (159 base configurations) |
+| `expansion` | `manifests/expansion-v1.json` | 1,890 | frozen `ifc-expansion-selection-v1` cohort: 630 new base configurations × 3 QoS levels, disjoint from every pilot instance and base. Same 105 source workflows, so it tests new infrastructure/seed/QoS configurations, not unseen DAGs |
+
+The 40 protected holdout instances of the pilot are in neither set.
+
 ## One-time setup
 
-**Actions** tab → **Prepare data** → **Run workflow**. It rebuilds the development instances on 20 machines
-(a few minutes), verifies all 319 files, and publishes them as the release asset `data/ifc-dev-v1.zip`.
-Rerun it only if `manifests/dev-v1.json` changes.
+**Actions** tab → **Prepare data** → **Run workflow**, once with `set = dev` and once with `set = expansion`.
+Each run rebuilds the set's instances on 20 machines, verifies every file against the frozen hashes in its
+manifest (byte-identical for `dev`, content-identical for `expansion`, whose frozen files used a different JSON
+layout), and publishes the release asset `data/ifc-<set>-v1.zip`. Rerun only if a manifest changes.
 
 ## Running a benchmark
 
@@ -29,9 +39,10 @@ Rerun it only if `manifests/dev-v1.json` changes.
 
 | Field | Example | Meaning |
 |---|---|---|
+| set | `dev` or `expansion` | instance set |
 | algos | `all` or `bdc,dcr-v1-admission` | IDs from `algorithms.toml` |
 | highlight | `dcr-v1-admission` | the proposed algorithm: drawn first, gains/losses computed against it |
-| suite | `smoke`, `core`, `all` | 5 cases, the fixed 24-case core set, or all 160 development cases |
+| suite | `smoke`, `core`, `all` | `dev` only: 5 cases, the fixed 24-case core set, or all 160. Use `all` for `expansion` |
 | families | `all` or `montage,sipht` | workflow families (CyberShake, Genome, LIGO, Montage, SIPHT) |
 | tasks | `all` or `60,1000` | task counts (60, 100, 200, 400, 600, 800, 1000) |
 | qos | `all` or `tight` | QoS profile: relaxed, moderate, tight |
@@ -127,8 +138,10 @@ algorithms/                  comparators and DCR v0/v1 (exact historical sources
 ifc_algorithms/proposed/     DCR v2 members and DCR v3 Rescue (exact historical sources)
 experiment/                  historical runner/evaluator adapter used by the historical tests
 manifests/dev-v1.json        the 160 development instances and 159 base instances, with SHA-256
+manifests/expansion-v1.json  the 1,890 expansion instances and 630 base instances, with SHA-256 and content hashes
 manifests/suites/            smoke (5) and core (24) case lists
-reference/                   historical results used by the replay check, and the AWS runtime study (aws-runtime.json)
+reference/                   historical results used by the replay check (primary 1,120; DCR runs; expansion
+                             15,120 = expansion-1890-results.jsonl.gz) and the AWS runtime study (aws-runtime.json)
 provenance/SOURCES.json      SHA-256 and origin of every algorithm source file
 tools/data.py                regenerate / pack / fetch / verify the dataset
 tools/bench.py               plan, run, merge
