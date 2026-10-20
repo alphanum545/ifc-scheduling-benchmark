@@ -31,14 +31,17 @@ on:
         description: "QoS profiles: relaxed, moderate, tight (or all)"
         default: "all"
       reps:
-        description: "Repetitions per run (2 also checks determinism)"
-        default: "2"
+        description: "Repetitions per run (1 = fastest; 2 also re-observes determinism)"
+        default: "1"
+      workers:
+        description: "Parallel instance processes per machine (0 = all cores; 1 = clean runtime study)"
+        default: "0"
       report_name:
         description: "Report folder name under results/reports/"
         default: "latest"
       shards:
-        description: "Parallel machines (max 20 on a free account)"
-        default: "20"
+        description: "Number of shards (jobs); 20 run at a time on a free account, the rest queue"
+        default: "60"
       force:
         description: "Ignore stored results and rerun everything"
         type: boolean
@@ -67,7 +70,7 @@ jobs:
         run: |
           python3 tools/bench.py plan --set "${{ inputs.set }}" --algos "${{ inputs.algos }}" --suite "${{ inputs.suite }}" \
             --families "${{ inputs.families }}" --tasks "${{ inputs.tasks }}" --qos "${{ inputs.qos }}" \
-            --reps "${{ inputs.reps }}" --shards "${{ inputs.shards }}" ${{ inputs.force && '--force' || '' }} \
+            --reps "${{ inputs.reps }}" --workers "${{ inputs.workers }}" --shards "${{ inputs.shards }}" ${{ inputs.force && '--force' || '' }} \
             --github-output "$GITHUB_OUTPUT" | tee plan.log
           { echo "## Plan"; echo '```'; cat plan.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

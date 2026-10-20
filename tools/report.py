@@ -90,8 +90,8 @@ def main() -> int:
             and r["source_sha256"] == reg[r["algo"]]["source_sha256"]]
     by = {(r["algo"], r["instance_id"]): r for r in rows}
 
-    def good(r):
-        return r and r["status"] == "ok" and truthy(r["valid"]) and truthy(r["deterministic"])
+    def good(r):  # one-repetition runs record deterministic="unchecked"; the replay check covers determinism
+        return r and r["status"] == "ok" and truthy(r["valid"]) and r["deterministic"] in ("True", "unchecked")
 
     common = sorted(i for i in wanted if all(good(by.get((n, i))) for n in algos))
     out = ROOT / "results" / "reports" / a.name
@@ -100,7 +100,7 @@ def main() -> int:
     lab = {n: reg[n]["label"] for n in algos}
     md = [f"# Report: {a.name}", "",
           f"Instance set: **{a.set}**. Algorithms: {', '.join(lab[n] for n in algos)}. Highlight: {lab.get(hl, 'none')}. "
-          f"Cases: {len(wanted)} selected, **{N} compared** (every selected algorithm valid and deterministic).", ""]
+          f"Cases: {len(wanted)} selected, **{N} compared** (every selected algorithm valid, and deterministic where checked).", ""]
 
     # ---- validity
     vrows = []
@@ -109,8 +109,12 @@ def main() -> int:
         vrows.append([lab[n], sum(r is not None for r in rs), sum(bool(good(r)) for r in rs),
                       sum(r is not None and r["status"] != "ok" for r in rs),
                       sum(r is not None and r["status"] == "ok" and not truthy(r["valid"]) for r in rs),
-                      sum(r is not None and r["status"] == "ok" and not truthy(r["deterministic"]) for r in rs),
+                      sum(r is not None and r["status"] == "ok" and r["deterministic"] == "False" for r in rs),
                       len(wanted) - sum(r is not None for r in rs)])
+    unchecked = sum(r["deterministic"] == "unchecked" for r in rows if r["status"] == "ok")
+    if unchecked:
+        md += [f"Determinism was not re-observed for {unchecked} one-repetition runs; the replay check against the "
+               "historical results covers it.", ""]
     md += ["## Validity", ""] + md_table(["Algorithm", "Runs", "Valid + deterministic", "Errors", "Invalid",
                                            "Nondeterministic", "Missing"], vrows) + [""]
 

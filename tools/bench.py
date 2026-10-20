@@ -44,7 +44,7 @@ FIELDS = [
     "status", "valid", "deterministic", "reps",
     "schedule_id", "schedule_sha256", "makespan_us", "deadline_us", "compute_cost_ncu", "budget_ncu",
     "compute_energy_nj", "network_energy_pj", "deadline_met", "budget_met", "joint_feasible",
-    "runtime_ns", "runtime_ns_all", "cpu", "python", "run_utc", "error",
+    "runtime_ns", "runtime_ns_all", "cpu", "python", "workers", "run_utc", "error",
 ]
 KEY = ("algo", "source_sha256", "instance_id")
 
@@ -153,7 +153,7 @@ def cmd_plan(a: argparse.Namespace) -> int:
         buckets[i].append(w)
         loads[i] += w["tasks"] ** 1.6 * len(w["algos"])
     WORK.mkdir(exist_ok=True)
-    plan = {"set": a.set, "reps": a.reps, "algos": algos, "shards": buckets,
+    plan = {"set": a.set, "reps": a.reps, "workers": a.workers, "algos": algos, "shards": buckets,
             "sources": {n: reg[n]["source_sha256"] for n in algos}}
     (WORK / "plan.json").write_text(json.dumps(plan, indent=1))
     runs = sum(len(w["algos"]) for w in work)
@@ -196,76 +196,110 @@ def run_one(scheduler, inp, base):
     return runtime, ev, valid, fp
 
 
-def cmd_run(a: argparse.Namespace) -> int:
+_W: dict = {}
+
+
+def _init_worker(plan: dict, data: str) -> None:
+    """Per-process state: registry, manifest and scheduler objects (created once per worker)."""
+    reg = registry()
+    man = manifest(plan.get("set", "dev"))
+    _W.update(reg=reg, plan=plan, data=Path(data),
+              entries={e["instance_id"]: e for e in man["entries"]},
+              bases={b["base_instance_id"]: b for b in man["base_entries"]},
+              schedulers={n: load_scheduler(reg[n]) for n in plan["algos"]})
+
+
+def _run_instance(w: dict) -> list[dict]:
+    """Run every planned algorithm on one instance, in one process, in rotating order."""
     from algorithms.common.interface import AlgorithmInput
+
+    reg, plan, schedulers = _W["reg"], _W["plan"], _W["schedulers"]
+    e = _W["entries"][w["instance_id"]]
+    data = _W["data"]
+    base = json.loads((data / _W["bases"][e["base_instance_id"]]["path"]).read_text(encoding="utf-8"))
+    qos = json.loads((data / e["path"]).read_text(encoding="utf-8"))
+    inp = AlgorithmInput.from_artifacts(base_instance=base, qos_instance=qos, split="development")
+    samples: dict[str, list] = {n: [] for n in w["algos"]}
+    errors: dict[str, str] = {}
+    for rep in range(plan["reps"]):
+        order = w["algos"] if rep % 2 == 0 else list(reversed(w["algos"]))
+        k = rep % len(order)
+        order = order[k:] + order[:k]
+        for n in order:
+            if n in errors:
+                continue
+            try:
+                samples[n].append(run_one(schedulers[n], inp, base))
+            except Exception as exc:  # recorded, never averaged in
+                errors[n] = f"{type(exc).__name__}: {exc}"[:300]
+                traceback.print_exc()
+    rows = []
+    for n in w["algos"]:
+        spec = reg[n]
+        row = {
+            "algo": n, "label": spec["label"], "role": spec["role"],
+            "algorithm_id": schedulers[n].algorithm_id, "algorithm_version": schedulers[n].algorithm_version,
+            "source_sha256": spec["source_sha256"], "instance_id": e["instance_id"], "family": e["family"],
+            "tasks": e["target_task_count"], "resource_scale": e["resource_scale"], "scenario": e["scenario_profile"],
+            "qos": e["qos_profile"], "replicate": e["replicate_id"], "reps": plan["reps"], "cpu": cpu_name(),
+            "python": platform.python_version(), "run_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "deadline_us": inp.deadline_us, "budget_ncu": inp.budget_ncu, "workers": plan.get("workers", 1),
+        }
+        if n in errors:
+            row.update(status="error", valid=False, deterministic=False, error=errors[n])
+        else:
+            runtimes = [s[0] for s in samples[n]]
+            ev = samples[n][0][1]
+            sch = ev.schedule
+            row.update(
+                status="ok", error="",
+                valid=all(s[2] for s in samples[n]),
+                # with one repetition determinism is not observed here; the replay check covers it
+                deterministic=(all(s[3] == samples[n][0][3] for s in samples[n]) if len(samples[n]) > 1
+                               else "unchecked"),
+                schedule_id=sch["schedule_id"], schedule_sha256=sch.get("schedule_sha256", ""),
+                makespan_us=sch["makespan_us"], compute_cost_ncu=sch["compute_cost_ncu"],
+                compute_energy_nj=sch["compute_energy_nj"], network_energy_pj=sch["network_energy_pj"],
+                deadline_met=ev.deadline_feasible, budget_met=ev.budget_feasible, joint_feasible=ev.joint_feasible,
+                runtime_ns=int(statistics.median(runtimes)), runtime_ns_all=" ".join(map(str, runtimes)),
+            )
+        rows.append(row)
+    return rows
+
+
+def cmd_run(a: argparse.Namespace) -> int:
+    import multiprocessing as mp
 
     reg = registry()
     plan = json.loads((WORK / "plan.json").read_text())
     if plan["sources"] != {n: reg[n]["source_sha256"] for n in plan["algos"]}:
         raise SystemExit("algorithm sources changed since the plan was made; re-plan")
-    man = manifest(plan.get("set", "dev"))
-    entries = {e["instance_id"]: e for e in man["entries"]}
-    bases = {b["base_instance_id"]: b for b in man["base_entries"]}
-    data = Path(a.data)
-    schedulers = {n: load_scheduler(reg[n]) for n in plan["algos"]}
-    rows = []
+    workers = a.workers or plan.get("workers") or os.cpu_count() or 1
+    plan["workers"] = workers
     work = plan["shards"][a.shard]
-    print(f"shard {a.shard}: {len(work)} instances, cpu: {cpu_name()}, cores: {os.cpu_count()}")
-    for wi, w in enumerate(work):
-        e = entries[w["instance_id"]]
-        base = json.loads((data / bases[e["base_instance_id"]]["path"]).read_text(encoding="utf-8"))
-        qos = json.loads((data / e["path"]).read_text(encoding="utf-8"))
-        inp = AlgorithmInput.from_artifacts(base_instance=base, qos_instance=qos, split="development")
-        samples: dict[str, list] = {n: [] for n in w["algos"]}
-        errors: dict[str, str] = {}
-        for rep in range(plan["reps"]):
-            order = w["algos"] if rep % 2 == 0 else list(reversed(w["algos"]))
-            k = rep % len(order)
-            order = order[k:] + order[:k]
-            for n in order:
-                if n in errors:
-                    continue
-                try:
-                    samples[n].append(run_one(schedulers[n], inp, base))
-                except Exception as exc:  # recorded, never averaged in
-                    errors[n] = f"{type(exc).__name__}: {exc}"[:300]
-                    traceback.print_exc()
-        for n in w["algos"]:
-            spec = reg[n]
-            row = {
-                "algo": n, "label": spec["label"], "role": spec["role"],
-                "algorithm_id": schedulers[n].algorithm_id, "algorithm_version": schedulers[n].algorithm_version,
-                "source_sha256": spec["source_sha256"], "instance_id": e["instance_id"], "family": e["family"],
-                "tasks": e["target_task_count"], "resource_scale": e["resource_scale"], "scenario": e["scenario_profile"],
-                "qos": e["qos_profile"], "replicate": e["replicate_id"], "reps": plan["reps"], "cpu": cpu_name(),
-                "python": platform.python_version(), "run_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "deadline_us": inp.deadline_us, "budget_ncu": inp.budget_ncu,
-            }
-            if n in errors:
-                row.update(status="error", valid=False, deterministic=False, error=errors[n])
-            else:
-                runtimes = [s[0] for s in samples[n]]
-                ev = samples[n][0][1]
-                sch = ev.schedule
-                row.update(
-                    status="ok", error="",
-                    valid=all(s[2] for s in samples[n]),
-                    deterministic=all(s[3] == samples[n][0][3] for s in samples[n]),
-                    schedule_id=sch["schedule_id"], schedule_sha256=sch.get("schedule_sha256", ""),
-                    makespan_us=sch["makespan_us"], compute_cost_ncu=sch["compute_cost_ncu"],
-                    compute_energy_nj=sch["compute_energy_nj"], network_energy_pj=sch["network_energy_pj"],
-                    deadline_met=ev.deadline_feasible, budget_met=ev.budget_feasible, joint_feasible=ev.joint_feasible,
-                    runtime_ns=int(statistics.median(runtimes)), runtime_ns_all=" ".join(map(str, runtimes)),
-                )
-            rows.append(row)
-        print(f"  [{wi + 1}/{len(work)}] {e['instance_id']}: "
-              + ", ".join(f"{r['algo']}={'J' if r.get('joint_feasible') is True else ('err' if r['status'] != 'ok' else '-')}"
-                          for r in rows[-len(w['algos']):]), flush=True)
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    write_store(rows, out)
-    bad = sum(r["status"] != "ok" or not r["valid"] or not r["deterministic"] for r in rows)
-    print(f"wrote {len(rows)} rows to {out}; {bad} invalid / nondeterministic / failed")
+    # resume: keep instances already completed in a previous (interrupted) attempt of this shard
+    done = {r["instance_id"] for r in read_store(out)} if out.exists() else set()
+    if not out.exists():
+        write_store([], out)
+    todo = [w for w in work if w["instance_id"] not in done]
+    print(f"shard {a.shard}: {len(work)} instances ({len(done)} already done), {workers} worker process(es), "
+          f"cpu: {cpu_name()}, cores: {os.cpu_count()}", flush=True)
+    # biggest first so the pool stays balanced
+    todo.sort(key=lambda w: -w["tasks"])
+    finished, bad = len(done), 0
+    ctx = mp.get_context("fork")
+    with ctx.Pool(workers, initializer=_init_worker, initargs=(plan, a.data), maxtasksperchild=50) as pool:
+        for rows in pool.imap_unordered(_run_instance, todo):
+            with open(out, "a", newline="", encoding="utf-8") as fh:  # saved as soon as each instance finishes
+                csv.DictWriter(fh, fieldnames=FIELDS, extrasaction="ignore").writerows(rows)
+            finished += 1
+            bad += sum(r["status"] != "ok" or not r["valid"] or r["deterministic"] is False for r in rows)
+            print(f"  [{finished}/{len(work)}] {rows[0]['instance_id']}: "
+                  + ", ".join(f"{r['algo']}={'J' if r.get('joint_feasible') is True else ('err' if r['status'] != 'ok' else '-')}"
+                              for r in rows), flush=True)
+    print(f"shard {a.shard} complete: {finished} instances in {out}; {bad} invalid / nondeterministic / failed rows")
     return 0
 
 
@@ -295,12 +329,15 @@ def main() -> int:
     pl.add_argument("--qos", default="all")
     pl.add_argument("--reps", type=int, default=2, help="repetitions per run (>=2 also checks determinism)")
     pl.add_argument("--shards", type=int, default=20)
+    pl.add_argument("--workers", type=int, default=0,
+                    help="parallel instance processes per shard (0 = all cores). Use 1 for a clean runtime study")
     pl.add_argument("--force", action="store_true")
     pl.add_argument("--github-output")
     r = sub.add_parser("run")
     r.add_argument("--data", default="data")
     r.add_argument("--shard", type=int, default=0)
     r.add_argument("--out", required=True)
+    r.add_argument("--workers", type=int, default=0, help="override the plan's worker count (0 = plan / all cores)")
     m = sub.add_parser("merge")
     m.add_argument("--inputs", required=True)
     a = p.parse_args()

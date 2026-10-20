@@ -46,9 +46,10 @@ layout), and publishes the release asset `data/ifc-<set>-v1.zip`. Rerun only if 
 | families | `all` or `montage,sipht` | workflow families (CyberShake, Genome, LIGO, Montage, SIPHT) |
 | tasks | `all` or `60,1000` | task counts (60, 100, 200, 400, 600, 800, 1000) |
 | qos | `all` or `tight` | QoS profile: relaxed, moderate, tight |
-| reps | `2` | repetitions per run; 2 or more also checks determinism |
+| reps | `1` | repetitions per run; 2 or more also re-observes determinism (the replay check covers it either way) |
+| workers | `0` | parallel instance processes per machine: 0 = all cores (fastest); 1 = one at a time, for a clean runtime study |
 | report_name | `dev-all` | folder name for this report |
-| shards | `20` | parallel machines (20 is the free-plan maximum) |
+| shards | `60` | number of jobs; 20 run at a time on the free plan, the rest queue. Each job saves after every instance and resumes if rerun |
 | force | off | rerun everything, ignoring stored results |
 
 When it finishes, the run page shows the summary. The report is committed to `results/reports/<report_name>/`
