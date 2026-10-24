@@ -373,5 +373,6 @@ The figures are joint-feasibility percentages of all dev instances, averaged ove
 | Unseen-workflow test, tuned comparators, tightness grid, robustness, exact check, placement | **Done** (§8b) |
 | Clean expansion runtime study | Optional (the AWS dev study covers v1) |
 | 40-instance holdout | Replaced by the unseen set. Run it only if the S3 checksums are recovered |
-| Two final novelty spot checks (§7) | 1–2 hours of reading |
+| Two final novelty spot checks (§7) | **Done** (§7b) |
+| **Scoring ablation**: DCR reserve with BDC-style normalization instead of slack-relative losses (§7b) | **Pending.** Agreed; run when the GitHub runners are free (dev + expansion, same protocol as §6b) |
 | Writing | Next |
