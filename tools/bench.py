@@ -87,7 +87,8 @@ def load_scheduler(spec: dict):
 
 
 # --------------------------------------------------------------------------- instances
-SET_MANIFESTS = {"dev": "dev-v1.json", "expansion": "expansion-v1.json", "unseen": "unseen-v1.json"}
+SET_MANIFESTS = {"dev": "dev-v1.json", "expansion": "expansion-v1.json", "unseen": "unseen-v1.json",
+                 "grid": "grid-v1.json"}
 
 
 def manifest(set_name: str = "dev") -> dict:

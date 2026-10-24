@@ -45,7 +45,14 @@ SETS = {
     "dev": {"manifest": "dev-v1.json", "asset": "ifc-dev-v1.zip", "check": "sha256"},
     "expansion": {"manifest": "expansion-v1.json", "asset": "ifc-expansion-v1.zip", "check": "content_sha256"},
     "unseen": {"manifest": "unseen-v1.json", "asset": "ifc-unseen-v1.zip", "check": "sha256"},
+    "grid": {"manifest": "grid-v1.json", "asset": "ifc-grid-v1.zip", "check": "sha256"},
 }
+GRID_SPLIT = "grid_evaluation"
+# Deadline fraction alpha (of T_econ - T_fast above T_fast) x budget fraction beta (of the gap
+# between the deadline-conditioned cost floor and the fast-anchor cost). The v1 QoS profiles are
+# three of the 25 cells: tight = (1/100, 1/10), moderate = (1/4, 1/2), relaxed = (3/4, 9/10).
+GRID_DEADLINE = (("001", 1, 100), ("005", 1, 20), ("025", 1, 4), ("050", 1, 2), ("075", 3, 4))
+GRID_BUDGET = (("010", 1, 10), ("030", 3, 10), ("050", 1, 2), ("070", 7, 10), ("090", 9, 10))
 UNSEEN_SPLIT = "unseen_evaluation"
 RELEASE_TAG = "data"
 FIXED_TIME = (2026, 9, 6, 0, 0, 0)  # deterministic zip member timestamps
@@ -121,6 +128,8 @@ def cmd_regen(a: argparse.Namespace) -> int:
     cfg = load_config(str(ds / "config" / "benchmark-v1.yaml"))
     if a.set == "unseen":
         return _regen_unseen(a, ds, man, cfg)
+    if a.set == "grid":
+        return _regen_grid(a, ds, man, cfg)
     sel = _selection_entries(a, ds, man)
     want = expected_files(man, check)
     out = Path(a.out)
@@ -200,6 +209,160 @@ def _regen_unseen(a: argparse.Namespace, ds: Path, man: dict, cfg: dict) -> int:
     if bad:
         print(f"{bad} regenerated files differ from the frozen hashes", file=sys.stderr)
         return 1
+    return 0
+
+
+# --------------------------------------------------------------------------- grid set (5 x 5 tightness)
+def grid_config(cfg: dict) -> dict:
+    """The unchanged v1 model with 25 extra QoS profiles d<alpha>-b<beta>."""
+    import copy
+    out = copy.deepcopy(cfg)
+    for dt, dn, dd in GRID_DEADLINE:
+        for bt, bn, bd in GRID_BUDGET:
+            name = f"d{dt}-b{bt}"
+            out["reference_makespan"]["deadline_interpolation_fractions"][name] = {"numerator": dn, "denominator": dd}
+            out["budget"]["joint_qos_profiles"][name] = {"deadline_level": name,
+                                                        "budget_gap_fraction": {"numerator": bn, "denominator": bd}}
+    return out
+
+
+def grid_entries(ds: Path, dev_manifest: dict) -> list[dict]:
+    """159 development base realizations x 25 grid cells (never holdout bases)."""
+    selection = json.loads((ds / "manifests" / "pilot-selection-v1.json").read_text(encoding="utf-8"))
+    if selection["content_sha256"] != dev_manifest["selection_sha256"]:
+        raise SystemExit("pilot selection checksum does not match the dev manifest")
+    by_cid = {s["candidate_id"]: s for s in selection["entries"]}
+    bases: dict[str, dict] = {}
+    for e in dev_manifest["entries"]:
+        s = by_cid[e["candidate_id"]]
+        if s["split"] != "development":
+            raise SystemExit("refusing to use a non-development base")
+        bases.setdefault(e["base_instance_id"], s)
+    out = []
+    for base_id in sorted(bases):
+        s = bases[base_id]
+        for dt, dn, dd in GRID_DEADLINE:
+            for bt, bn, bd in GRID_BUDGET:
+                prof = f"d{dt}-b{bt}"
+                cid = f"candidate-{base_id.removeprefix('base-')}-{prof}"
+                out.append({
+                    "candidate_id": cid, "instance_id": cid, "base_instance_id": base_id,
+                    "family": s["family"], "target_task_count": int(s["target_task_count"]),
+                    "replicate_id": s["replicate_id"], "source_path": s["source_path"],
+                    "source_sha256": s["source_sha256"], "resource_scale": s["resource_scale"],
+                    "scenario_profile": s["scenario_profile"], "ifc_realization_seed": int(s["ifc_realization_seed"]),
+                    "qos_profile": prof, "deadline_fraction": f"{dn}/{dd}", "budget_fraction": f"{bn}/{bd}",
+                    "split": GRID_SPLIT, "path": f"instances/grid/{cid}.json",
+                })
+    return out
+
+
+def grid_build_group(ds: Path, cfg: dict, gcfg: dict, group: list[dict]) -> dict[str, bytes]:
+    from generator.dax import normalize_dax  # noqa: E402
+    from generator.instance import build_base_instance  # noqa: E402
+    import generator.materialize as M  # noqa: E402
+    s0 = group[0]
+    source = M._safe_source(ds / "source_workflows", s0["source_path"])
+    if sha(source.read_bytes()) != s0["source_sha256"]:
+        raise SystemExit(f"source workflow checksum mismatch for {s0['source_path']}")
+    wf = normalize_dax(source, family=s0["family"], target_task_count=int(s0["target_task_count"]),
+                       replicate_id=s0["replicate_id"], reference_mips=int(cfg["workflows"]["reference_mips"]))
+    base = build_base_instance(wf, dict(cfg), scale=s0["resource_scale"],
+                               scenario=s0["scenario_profile"], seed=int(s0["ifc_realization_seed"]))
+    if base["metadata"]["base_instance_id"] != s0["base_instance_id"]:
+        raise SystemExit(f"base identity mismatch for {s0['base_instance_id']}")
+    cal = M.build_calibration_result(base, k=int(cfg["budget"]["calibration"]["tradeoff_solutions"]))
+    files = {f"base/{s0['base_instance_id']}.json": M._json_file_bytes(base)}
+    for e in group:
+        files[e["path"]] = M._json_file_bytes(M.build_qos_instance(e, cal, gcfg))
+    return files
+
+
+def _regen_grid(a: argparse.Namespace, ds: Path, man: dict, cfg: dict) -> int:
+    gcfg = grid_config(cfg)
+    want = expected_files(man, "sha256")
+    out = Path(a.out)
+    groups = shard_groups(man, a.shards)[a.shard]
+    print(f"set grid, shard {a.shard}/{a.shards}: {len(groups)} base instances")
+    bad = 0
+    for base_id, group in groups:
+        if any(e["split"] != GRID_SPLIT for e in group):
+            raise SystemExit("refusing to materialize a non-grid entry")
+        files = grid_build_group(ds, cfg, gcfg, group)
+        mism = sum(sha(b) != want[rel] for rel, b in files.items())
+        bad += mism
+        _write_group(out, files)
+        print(f"  {base_id}: {len(group)} QoS, {'ok' if mism == 0 else f'{mism} MISMATCH'}", flush=True)
+    return 1 if bad else 0
+
+
+def cmd_grid_build(a: argparse.Namespace) -> int:
+    ds = Path(a.dataset_repo).resolve()
+    sys.path.insert(0, str(ds))
+    from generator.config import load_config  # noqa: E402
+    if (ROOT / "manifests" / SETS["grid"]["manifest"]).exists():
+        raise SystemExit("manifests/grid-v1.json already exists: the grid set is frozen; use regen")
+    cfg = load_config(str(ds / "config" / "benchmark-v1.yaml"))
+    gcfg = grid_config(cfg)
+    entries = grid_entries(ds, manifest("dev"))
+    groups = shard_groups({"entries": entries}, a.shards)[a.shard]
+    out = Path(a.out)
+    hashes: dict[str, dict] = {}
+    for base_id, group in groups:
+        t0 = time.time()
+        files = grid_build_group(ds, cfg, gcfg, group)
+        _write_group(out, files)
+        for rel, b in files.items():
+            hashes[rel] = {"sha256": sha(b), "content_sha256": digest(b, "content_sha256")}
+        print(f"  {base_id}: {len(group)} QoS, {time.time() - t0:.1f}s", flush=True)
+    (out / "hashes.json").write_text(json.dumps(hashes, sort_keys=True, indent=0) + "\n", encoding="utf-8")
+    return 0
+
+
+def cmd_grid_merge(a: argparse.Namespace) -> int:
+    ds = Path(a.dataset_repo).resolve()
+    sys.path.insert(0, str(ds))
+    from generator.canonical import content_sha256  # noqa: E402
+    target = ROOT / "manifests" / SETS["grid"]["manifest"]
+    if target.exists():
+        raise SystemExit("manifests/grid-v1.json already exists: refusing to overwrite a freeze")
+    dev = manifest("dev")
+    entries = grid_entries(ds, dev)
+    hashes: dict[str, dict] = {}
+    for f in sorted(glob.glob(a.inputs)):
+        hashes.update(json.loads(Path(f).read_text(encoding="utf-8")))
+    bases = sorted({e["base_instance_id"] for e in entries})
+    dev_base = {b["path"]: b["sha256"] for b in dev["base_entries"]}
+    missing = [e["path"] for e in entries if e["path"] not in hashes]
+    missing += [f"base/{b}.json" for b in bases if f"base/{b}.json" not in hashes]
+    if missing:
+        raise SystemExit(f"{len(missing)} files missing from the shard hash lists")
+    # the grid reuses the dev base realizations: their bytes must equal the frozen dev bases
+    diff = [b for b in bases if hashes[f"base/{b}.json"]["sha256"] != dev_base[f"base/{b}.json"]]
+    if diff:
+        raise SystemExit(f"{len(diff)} rebuilt base files differ from the frozen dev bases")
+    head = subprocess.run(["git", "-C", str(ds), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    man = {
+        "schema_version": 1,
+        "selection_id": "ifc-grid-v1",
+        "scope": ("Deadline x budget tightness grid: the 159 development base realizations of the pilot, each "
+                  "with 25 joint QoS cells (deadline fraction in {1/100,1/20,1/4,1/2,3/4} x budget fraction in "
+                  "{1/10,3/10,1/2,7/10,9/10}), built with the unchanged v1 calibration. Holdout bases excluded. "
+                  "Frozen before any scheduler ran on it."),
+        "generator_commit_sha": head,
+        "selection_sha256": dev["selection_sha256"],
+        "deadline_fractions": [f"{n}/{d}" for _, n, d in GRID_DEADLINE],
+        "budget_fractions": [f"{n}/{d}" for _, n, d in GRID_BUDGET],
+        "instance_count": len(entries),
+        "base_instance_count": len(bases),
+        "split_counts": {GRID_SPLIT: len(entries)},
+        "entries": [{**e, **hashes[e["path"]]} for e in entries],
+        "base_entries": [{"base_instance_id": b, "path": f"base/{b}.json", **hashes[f"base/{b}.json"]} for b in bases],
+    }
+    man["content_sha256"] = content_sha256(man)
+    target.write_text(json.dumps(man, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"froze {len(entries)} grid instances over {len(bases)} dev bases at Dataset {head}; "
+          f"content_sha256 {man['content_sha256']}")
     return 0
 
 
@@ -377,11 +540,20 @@ def main() -> int:
     fm = sub.add_parser("freeze-merge")
     fm.add_argument("--dataset-repo", required=True)
     fm.add_argument("--inputs", required=True, help="glob of shard hashes.json files")
+    gb = sub.add_parser("grid-build")
+    gb.add_argument("--dataset-repo", required=True)
+    gb.add_argument("--shard", type=int, default=0)
+    gb.add_argument("--shards", type=int, default=1)
+    gb.add_argument("--out", required=True)
+    gm = sub.add_parser("grid-merge")
+    gm.add_argument("--dataset-repo", required=True)
+    gm.add_argument("--inputs", required=True)
     for s in (r, k, v, f):
         s.add_argument("--set", choices=sorted(SETS), default="dev")
     a = p.parse_args()
     return {"regen": cmd_regen, "pack": cmd_pack, "verify": cmd_verify, "fetch": cmd_fetch,
-            "freeze-build": cmd_freeze_build, "freeze-merge": cmd_freeze_merge}[a.cmd](a)
+            "freeze-build": cmd_freeze_build, "freeze-merge": cmd_freeze_merge,
+            "grid-build": cmd_grid_build, "grid-merge": cmd_grid_merge}[a.cmd](a)
 
 
 if __name__ == "__main__":

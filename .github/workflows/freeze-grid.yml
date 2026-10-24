@@ -1,0 +1,97 @@
+name: Freeze grid set
+
+# One-time freeze of the ifc-grid-v1 tightness grid: the 159 development base realizations x
+# 25 deadline/budget cells (3,975 instances), built with the unchanged v1 calibration from the
+# Dataset commit of the dev set. Every rebuilt base must equal the frozen dev base byte for byte.
+# No scheduler runs here; it refuses to run if manifests/grid-v1.json already exists.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset_ref:
+        description: "alphanum545/Dataset commit (40-char SHA); use the dev generator commit"
+        required: true
+      shards:
+        description: "Parallel machines"
+        default: "40"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: freeze-grid
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse to overwrite an existing freeze
+        run: |
+          if [ -f manifests/grid-v1.json ]; then echo "grid set is already frozen" >&2; exit 1; fi
+          echo "${{ inputs.dataset_ref }}" | grep -Eq '^[0-9a-f]{40}$' || { echo "dataset_ref must be a 40-char SHA" >&2; exit 1; }
+      - id: m
+        run: python3 -c "import json;print('matrix='+json.dumps(list(range(int('${{ inputs.shards }}')))))" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: true
+      max-parallel: 20
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: build ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: alphanum545/Dataset
+          ref: ${{ inputs.dataset_ref }}
+          path: .dataset
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install --quiet "PyYAML>=6,<7" "jsonschema>=4.23,<5"
+      - name: Build shard ${{ matrix.shard }}
+        run: python3 tools/data.py grid-build --dataset-repo .dataset --shard ${{ matrix.shard }} --shards ${{ inputs.shards }} --out .work/freeze-${{ matrix.shard }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freeze-grid-${{ matrix.shard }}
+          path: .work/freeze-${{ matrix.shard }}/hashes.json
+          retention-days: 7
+
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: alphanum545/Dataset
+          ref: ${{ inputs.dataset_ref }}
+          path: .dataset
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install --quiet "PyYAML>=6,<7" "jsonschema>=4.23,<5"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: freeze-grid-*
+          path: .work
+      - name: Write the frozen manifest
+        run: |
+          python3 tools/data.py grid-merge --dataset-repo .dataset --inputs ".work/freeze-grid-*/hashes.json" | tee freeze.log
+          { echo "## Grid set frozen"; echo '```'; cat freeze.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Commit the freeze
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifests/grid-v1.json
+          git commit -m "Freeze ifc-grid-v1 instance manifest (Dataset ${{ inputs.dataset_ref }})"
+          for i in 1 2 3 4 5; do git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0; sleep $((5 * i)); done
+          exit 1

@@ -17,7 +17,7 @@ on:
         description: "Instance set: dev (160), expansion (1,890) or unseen (2,241; final test, run once)"
         default: "dev"
         type: choice
-        options: [dev, expansion, unseen]
+        options: [dev, expansion, unseen, grid]
       suite:
         description: "dev set only: smoke (5), core (24) or all (160). Use all for expansion"
         default: "all"
@@ -132,22 +132,27 @@ jobs:
           pattern: shard-*
           path: .work
           merge-multiple: true
-      - name: Merge results into the store
-        run: python3 tools/bench.py merge --inputs ".work/shard-*.csv"
-      - name: Build report
-        run: |
-          python3 tools/report.py --set "${{ inputs.set }}" --algos "${{ inputs.algos }}" --highlight "${{ inputs.highlight }}" \
-            --suite "${{ inputs.suite }}" --families "${{ inputs.families }}" --tasks "${{ inputs.tasks }}" \
-            --qos "${{ inputs.qos }}" --name "${{ inputs.report_name }}" > /dev/null
-          cat "results/reports/${{ inputs.report_name }}/summary.md" >> "$GITHUB_STEP_SUMMARY"
-          python3 tools/verify_replay.py --out results/replay.md > /dev/null
-      - name: Commit results
+      - name: Merge, report and commit (re-synced with the latest main on every attempt)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add results/store.csv results/replay.md "results/reports/${{ inputs.report_name }}"
-          git commit -m "Benchmark results: ${{ inputs.report_name }}" || { echo "nothing new"; exit 0; }
-          for i in 1 2 3; do git pull --rebase && git push && exit 0; sleep 5; done
+          for i in 1 2 3 4 5; do
+            # Another run may have committed to the store after this run started: always rebuild
+            # the store and report on top of the newest main instead of rebasing a stale store.
+            git fetch -q origin main && git reset -q --hard origin/main
+            python3 tools/bench.py merge --inputs ".work/shard-*.csv"
+            python3 tools/report.py --set "${{ inputs.set }}" --algos "${{ inputs.algos }}" --highlight "${{ inputs.highlight }}" \
+              --suite "${{ inputs.suite }}" --families "${{ inputs.families }}" --tasks "${{ inputs.tasks }}" \
+              --qos "${{ inputs.qos }}" --name "${{ inputs.report_name }}" > /dev/null
+            python3 tools/verify_replay.py --out results/replay.md > /dev/null
+            git add results/store.csv results/replay.md "results/reports/${{ inputs.report_name }}"
+            git commit -q -m "Benchmark results: ${{ inputs.report_name }}" || { echo "nothing new"; exit 0; }
+            if git push -q origin HEAD:main; then
+              cat "results/reports/${{ inputs.report_name }}/summary.md" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep $((5 * i))
+          done
           exit 1
       - uses: actions/upload-artifact@v4
         with:

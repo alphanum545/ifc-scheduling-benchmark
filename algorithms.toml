@@ -171,3 +171,100 @@ class = "WeightedRankScheduler"
 role = "ablation"
 enabled = false
 sources = ["algorithms/dcr_ablations", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+# Weight-tuned comparator variants (docs/proposed/EXPERIMENTS_PAPER1.md); 0.5 is the registered comparator.
+[bdc-w01]
+label = "BDC (w=0.1)"
+module = "algorithms.tuning"
+class = "BDCScheduler_01"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bddc_bdc", "algorithms/common", "algorithms/__init__.py"]
+
+[bddc-w01]
+label = "BDDC (w=0.1)"
+module = "algorithms.tuning"
+class = "BDDCScheduler_01"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bddc_bdc", "algorithms/common", "algorithms/__init__.py"]
+
+[bdheft-a01]
+label = "BDHEFT (a=0.1)"
+module = "algorithms.tuning"
+class = "BDHEFTScheduler_01"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bdheft", "algorithms/common", "algorithms/__init__.py"]
+
+[bdc-w03]
+label = "BDC (w=0.3)"
+module = "algorithms.tuning"
+class = "BDCScheduler_03"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bddc_bdc", "algorithms/common", "algorithms/__init__.py"]
+
+[bddc-w03]
+label = "BDDC (w=0.3)"
+module = "algorithms.tuning"
+class = "BDDCScheduler_03"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bddc_bdc", "algorithms/common", "algorithms/__init__.py"]
+
+[bdheft-a03]
+label = "BDHEFT (a=0.3)"
+module = "algorithms.tuning"
+class = "BDHEFTScheduler_03"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bdheft", "algorithms/common", "algorithms/__init__.py"]
+
+[bdc-w07]
+label = "BDC (w=0.7)"
+module = "algorithms.tuning"
+class = "BDCScheduler_07"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bddc_bdc", "algorithms/common", "algorithms/__init__.py"]
+
+[bddc-w07]
+label = "BDDC (w=0.7)"
+module = "algorithms.tuning"
+class = "BDDCScheduler_07"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bddc_bdc", "algorithms/common", "algorithms/__init__.py"]
+
+[bdheft-a07]
+label = "BDHEFT (a=0.7)"
+module = "algorithms.tuning"
+class = "BDHEFTScheduler_07"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bdheft", "algorithms/common", "algorithms/__init__.py"]
+
+[bdc-w09]
+label = "BDC (w=0.9)"
+module = "algorithms.tuning"
+class = "BDCScheduler_09"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bddc_bdc", "algorithms/common", "algorithms/__init__.py"]
+
+[bddc-w09]
+label = "BDDC (w=0.9)"
+module = "algorithms.tuning"
+class = "BDDCScheduler_09"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bddc_bdc", "algorithms/common", "algorithms/__init__.py"]
+
+[bdheft-a09]
+label = "BDHEFT (a=0.9)"
+module = "algorithms.tuning"
+class = "BDHEFTScheduler_09"
+role = "tuning"
+enabled = false
+sources = ["algorithms/tuning", "algorithms/bdheft", "algorithms/common", "algorithms/__init__.py"]

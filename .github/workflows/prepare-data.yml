@@ -16,7 +16,7 @@ on:
         description: "Instance set: dev, expansion or unseen"
         default: "dev"
         type: choice
-        options: [dev, expansion, unseen]
+        options: [dev, expansion, unseen, grid]
       shards:
         description: "Parallel machines"
         default: "20"
