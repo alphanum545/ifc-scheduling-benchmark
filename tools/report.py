@@ -70,7 +70,7 @@ def main() -> int:
     p.add_argument("--algos", default="all")
     p.add_argument("--highlight", default="dcr-v1-admission")
     p.add_argument("--baseline", default="bdc", help="runtime ratios are paired against this algorithm")
-    p.add_argument("--set", default="dev", choices=["dev", "expansion"])
+    p.add_argument("--set", default="dev", choices=["dev", "expansion", "unseen"])
     p.add_argument("--suite", default="all")
     p.add_argument("--families", default="all")
     p.add_argument("--tasks", default="all")

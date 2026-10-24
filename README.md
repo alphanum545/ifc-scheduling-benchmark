@@ -24,7 +24,15 @@ tables and paper-ready figures.
 | `dev` | `manifests/dev-v1.json` | 160 | development split of the 200-input pilot (159 base configurations) |
 | `expansion` | `manifests/expansion-v1.json` | 1,890 | frozen `ifc-expansion-selection-v1` cohort: 630 new base configurations × 3 QoS levels, disjoint from every pilot instance and base. Same 105 source workflows, so it tests new infrastructure/seed/QoS configurations, not unseen DAGs |
 
+| `unseen` | `manifests/unseen-v1.json` (written once by **Freeze unseen set**) | 2,025 | `ifc-unseen-v1`: 75 source DAGs that no scheduler was designed on. There are 35 new Bharathi r04 replicates of the five families, checksum-distinct from the v1 r01–r03, and 40 WfCommons DAGs of three new families (1000genome, srasearch, soykb), each crossed with 3 scales × 3 scenarios × 3 QoS levels. **Final test: freeze first, run once.** See the Dataset repository's `docs/UNSEEN_WORKFLOWS_V1.md` |
+
 The 40 protected holdout instances of the pilot are in neither set.
+
+**Unseen set, one-time order:**
+1. In the Dataset repository, merge the sources produced by `unseen-source-acquisition`.
+2. Run **Freeze unseen set** here with that Dataset commit. It builds every instance and commits `manifests/unseen-v1.json`. No scheduler runs.
+3. Run **Prepare data** with `set = unseen`. It regenerates the set on fresh machines, checks every byte against the frozen hashes and publishes the release asset.
+4. Run **Benchmark** with `set = unseen`, once, with the frozen algorithms.
 
 ## One-time setup
 

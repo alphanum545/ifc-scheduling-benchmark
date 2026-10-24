@@ -3,6 +3,8 @@ name: Prepare data
 # Run once per instance set (and again only if its manifest changes).
 #   dev        160 pilot development instances -> release asset data/ifc-dev-v1.zip (byte-identical check)
 #   expansion  1,890 frozen expansion instances -> data/ifc-expansion-v1.zip (content-identical check)
+#   unseen     2,025 frozen unseen-DAG instances -> data/ifc-unseen-v1.zip (byte-identical check against
+#              the hashes written once by the "Freeze unseen set" workflow)
 # Instances are regenerated from the public Dataset repository at the generator commit in
 # the set's manifest and checked against the frozen hashes before publishing.
 # The 40 protected holdout instances are in neither manifest and are never generated.
@@ -11,10 +13,10 @@ on:
   workflow_dispatch:
     inputs:
       set:
-        description: "Instance set: dev or expansion"
+        description: "Instance set: dev, expansion or unseen"
         default: "dev"
         type: choice
-        options: [dev, expansion]
+        options: [dev, expansion, unseen]
       shards:
         description: "Parallel machines"
         default: "20"
