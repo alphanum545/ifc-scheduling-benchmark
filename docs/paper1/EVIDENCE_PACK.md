@@ -217,6 +217,49 @@ Suggested contribution sentence:
 
 Two short checks to do before submission, about 1–2 hours in total rather than days: search Google Scholar for "lower bound" AND "budget" AND "list scheduling" AND workflow since 2022, and read the related-work sections of the two most recent IFC deadline–budget papers you cite. If neither shows a per-placement priced lower-bound screen, the claim stands as worded.
 
+## 7b. Novelty check: final verdict (completed 2026-10-24; supersedes §7 and the claim note in §6b)
+
+**Sources checked:**
+- the audited comparator papers in `docs/paper_audits/`: BDHEFT (Verma & Kaushal 2015), DBCS (Arabnejad, Barbosa & Prodan 2016), BDSD (Sun et al. 2019), BDDC/BDC (Taghinezhad-Niar et al. 2021);
+- the budget-aware workflow algorithms from ICL/UTK (2018);
+- concurrent-workflow budget–deadline scheduling (Soft Computing 2018, abstract only);
+- DDBWS (J. Supercomputing 2021, abstract only);
+- targeted searches for 2023–2026 IFC/fog deadline–budget heuristics. Recent IFC work is mostly metaheuristic or RL, for example RIGEO (2026); it is related work, not prior art for DCR's mechanism.
+
+**DCR component → closest prior art → status:**
+
+| DCR component | Closest prior art | Status |
+|---|---|---|
+| Never exceeding the budget, via a cheapest-remaining reserve (raw invariant) | **DBCS:** ΔCost = unconsumed budget − cheapest cost of the remaining tasks, a hard limit. BHEFT/BDHEFT use average remaining cost; BDSD uses rb/l; ICL 2018 uses up-front reserves | **Not new.** State it as a property shared with DBCS. |
+| Combining normalized time and cost scores for resource selection | BDC/BDDC: ω·TQ + (1−ω)·CQ, normalized by sub-deadline or remaining budget. DBCS: TimeQ/CostQ normalized over the candidates' range | **Not new.** The ablation confirms that the aggregation form (minimax or weighted sum) is not the source of the gain. |
+| Per-task time windows from the deadline (latest finish = D − critical tail) | Sub-deadlines in DBCS, BDSD and BDDC; latest-finish times in the PCP/IC-PCP family | **Not new** as a concept. |
+| **Deadline-aware cheapest-completion reserve:** a lower bound on the remaining cost that counts, for each unscheduled task, only options that can still meet its latest finish, after the candidate's capacity occupation and exact child-arrival delays. It is used both as a per-placement admission test and as the base of the budget slack | Every reserve found is **deadline-blind**: DBCS cheapest-remaining, BHEFT average, BDSD rb/l, ICL proportional shares | **New, as far as this check found.** Measured contribution: +2.6 pp overall (53 vs 3 cases) and +7.5 pp at tight QoS, compared with a DBCS-style deadline-blind reserve (§6b). |
+| **Slack-consumption scoring:** each placement is scored by the fraction of the task's remaining time slack, up to its latest finish, and the fraction of the remaining budget slack, above the deadline-aware reserve, that it consumes | Closest is BDC's TQ/CQ, but BDC normalizes by sub-deadline and remaining budget with no future-cost reserve. DBCS normalizes over the candidates' min–max range | **New as a formulation, but its separate effect is not isolated.** The no-reserve ablation still reaches 83.5% against DBCS's 47.8% and BDC's 75.5%, with the same reserve type as DBCS. That suggests the slack-relative scoring matters, but we did not ablate DCR's normalization directly against DBCS-style or BDC-style normalization. |
+| Exact child-arrival correction inside the same complexity bound (batched three-tier sweep) | None found | **New, small:** +0.5 pp (§6). |
+| Dual price vectors on capacity checkpoints | Lagrangian bounds exist in exact project-scheduling methods | Not a contribution: inert on this benchmark (§6b). |
+| v3: a constant-size rescue portfolio that never loses a v1 success | Algorithm portfolios are generic | Engineering extension: the guarantee and the measured gain are reportable, but this is not a novelty claim. |
+
+**Verdict:** the novelty is real but modest. It rests on one mechanism, the **deadline-aware reserve**. The budget reserve itself is coupled to the deadline windows, so a placement is admitted only while the cheapest *timely* completion still fits the budget. Each placement is then scored by how much of these feasibility-preserving time and budget slacks it uses. Prior deadline–budget list heuristics reserve budget without regard to the deadline, and score against sub-deadlines or candidate ranges. That is enough for a solid journal paper whose main weight is the strong, reproducible empirical evidence (§1–§2, §8b). It is not a new paradigm, and the paper should not present it as one.
+
+**Claim wording to use:**
+
+> To the best of our knowledge, existing deadline- and budget-constrained workflow list heuristics reserve budget for unscheduled tasks without regard to the deadline (cheapest, average or proportional remaining cost). DCR instead admits a placement only if a *deadline-aware* lower bound on the cost of completing the remaining tasks — counting only resources on which each task can still meet its latest finish time, including the candidate's effect on its children's arrival — still fits the budget, and ranks admitted placements by the fraction of the remaining time slack and of the remaining budget slack they consume. Like DBCS, DCR never exceeds the budget; unlike it, its reserve also protects the deadline.
+
+**Claims to avoid:**
+- "first algorithm guaranteeing budget compliance" (DBCS already does);
+- "parameter-free ranking is superior to weighted rules" (the ablation contradicts it);
+- "dual-priced reserve" as a source of gain (the prices are inert);
+- any "novel" claim for v3's portfolio.
+
+**Related-work paragraph must cite and contrast:**
+- DBCS: the same hard budget guarantee, but a deadline-blind reserve and candidate-range normalization;
+- BHEFT/BDHEFT: average-cost spare budget;
+- BDSD: per-task remaining-budget share;
+- BDC/BDDC: weighted, sub-deadline-normalized quality;
+- the ICL budget-aware algorithms: up-front reserves, not deadline-aware.
+
+**One optional ablation would make the slack-scoring claim fully attributable.** Replace DCR's slack-relative losses with BDC-style normalization (sub-deadline and remaining budget) while keeping DCR's deadline-aware reserve. It is the same kind of run as the §6b ablations. It is not required: without it, state the scoring formulation as part of the method rather than as a separately proven contribution.
+
 ## 8. Related work: handling metaheuristics
 
 Paragraph you can adapt:
