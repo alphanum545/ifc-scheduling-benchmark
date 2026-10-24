@@ -87,7 +87,7 @@ def load_scheduler(spec: dict):
 
 
 # --------------------------------------------------------------------------- instances
-SET_MANIFESTS = {"dev": "dev-v1.json", "expansion": "expansion-v1.json"}
+SET_MANIFESTS = {"dev": "dev-v1.json", "expansion": "expansion-v1.json", "unseen": "unseen-v1.json"}
 
 
 def manifest(set_name: str = "dev") -> dict:
@@ -322,7 +322,8 @@ def main() -> int:
     pl = sub.add_parser("plan")
     pl.add_argument("--algos", default="all")
     pl.add_argument("--set", default="dev", choices=sorted(SET_MANIFESTS),
-                    help="dev (160 pilot development cases) or expansion (1,890 frozen expansion cases)")
+                    help="dev (160 pilot development cases), expansion (1,890 frozen expansion cases) "
+                         "or unseen (2,241 frozen unseen-DAG cases)")
     pl.add_argument("--suite", default="all", help="dev set only: smoke (5), core (24) or all (160)")
     pl.add_argument("--families", default="all")
     pl.add_argument("--tasks", default="all")

@@ -1,0 +1,98 @@
+name: Freeze unseen set
+
+# One-time freeze of the ifc-unseen-v1 evaluation set (2,241 instances, 83 unseen DAGs).
+# Builds every base, calibration and QoS instance from the Dataset sources at `dataset_ref`
+# with the unchanged v1 generator code path, records the SHA-256 of every file, and commits
+# manifests/unseen-v1.json. No scheduler runs here. It refuses to run if the manifest already
+# exists. Afterwards, "Prepare data" with set = unseen regenerates the set on fresh machines,
+# checks every byte against this manifest and publishes the release asset.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset_ref:
+        description: "alphanum545/Dataset commit (40-char SHA) that contains the frozen unseen sources"
+        required: true
+      shards:
+        description: "Parallel machines"
+        default: "40"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: freeze-unseen
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse to overwrite an existing freeze
+        run: |
+          if [ -f manifests/unseen-v1.json ]; then echo "unseen set is already frozen" >&2; exit 1; fi
+          echo "${{ inputs.dataset_ref }}" | grep -Eq '^[0-9a-f]{40}$' || { echo "dataset_ref must be a 40-char SHA" >&2; exit 1; }
+      - id: m
+        run: python3 -c "import json;print('matrix='+json.dumps(list(range(int('${{ inputs.shards }}')))))" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: true
+      max-parallel: 20
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: build ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: alphanum545/Dataset
+          ref: ${{ inputs.dataset_ref }}
+          path: .dataset
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install --quiet "PyYAML>=6,<7" "jsonschema>=4.23,<5"
+      - name: Build shard ${{ matrix.shard }}
+        run: python3 tools/data.py freeze-build --dataset-repo .dataset --shard ${{ matrix.shard }} --shards ${{ inputs.shards }} --out .work/freeze-${{ matrix.shard }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freeze-unseen-${{ matrix.shard }}
+          path: .work/freeze-${{ matrix.shard }}/hashes.json
+          retention-days: 7
+
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: alphanum545/Dataset
+          ref: ${{ inputs.dataset_ref }}
+          path: .dataset
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install --quiet "PyYAML>=6,<7" "jsonschema>=4.23,<5"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: freeze-unseen-*
+          path: .work
+      - name: Write the frozen manifest
+        run: |
+          python3 tools/data.py freeze-merge --dataset-repo .dataset --inputs ".work/freeze-unseen-*/hashes.json" | tee freeze.log
+          { echo "## Unseen set frozen"; echo '```'; cat freeze.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Commit the freeze
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifests/unseen-v1.json
+          git commit -m "Freeze ifc-unseen-v1 instance manifest (Dataset ${{ inputs.dataset_ref }})"
+          git push origin HEAD

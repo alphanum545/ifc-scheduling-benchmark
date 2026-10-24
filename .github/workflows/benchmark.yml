@@ -14,10 +14,10 @@ on:
         description: "Proposed algorithm to highlight (gains/losses computed against it)"
         default: "dcr-v1-admission"
       set:
-        description: "Instance set: dev (160 pilot development) or expansion (1,890)"
+        description: "Instance set: dev (160), expansion (1,890) or unseen (2,241; final test, run once)"
         default: "dev"
         type: choice
-        options: [dev, expansion]
+        options: [dev, expansion, unseen]
       suite:
         description: "dev set only: smoke (5), core (24) or all (160). Use all for expansion"
         default: "all"

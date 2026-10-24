@@ -7,6 +7,9 @@ its SHA-256:
   dev        manifests/dev-v1.json        160 development instances of the 200-input pilot
   expansion  manifests/expansion-v1.json  1,890 instances (630 new base configurations x 3 QoS)
                                            of the frozen ifc-expansion-selection-v1 cohort
+  unseen     manifests/unseen-v1.json     2,241 instances of ifc-unseen-v1: 83 source DAGs no
+                                           scheduler was designed on (35 new Bharathi replicates,
+                                           48 WfCommons DAGs of 4 new families) x 27 configurations
 
 The public repository ships no instance files. Each set is regenerated from the public
 Dataset repository (alphanum545/Dataset) at the generator commit recorded in its manifest
@@ -14,6 +17,9 @@ and checked against the frozen hashes:
   dev        byte-identical files (sha256)
   expansion  identical content (content_sha256 = sha256 of generator.canonical.canonical_json_bytes),
              because the frozen expansion files were written with a different JSON layout
+  unseen     byte-identical files (sha256). Its manifest is produced once by `freeze-build` /
+             `freeze-merge` (workflow "Freeze unseen set") BEFORE any scheduler runs; a later
+             independent regen must reproduce every byte.
 The 40 protected holdout instances of the pilot are in neither manifest and are never generated.
 
   python3 tools/data.py regen  --set dev --dataset-repo ../Dataset --shard 0 --shards 20 --out .work/regen-0
@@ -38,7 +44,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SETS = {
     "dev": {"manifest": "dev-v1.json", "asset": "ifc-dev-v1.zip", "check": "sha256"},
     "expansion": {"manifest": "expansion-v1.json", "asset": "ifc-expansion-v1.zip", "check": "content_sha256"},
+    "unseen": {"manifest": "unseen-v1.json", "asset": "ifc-unseen-v1.zip", "check": "sha256"},
 }
+UNSEEN_SPLIT = "unseen_evaluation"
 RELEASE_TAG = "data"
 FIXED_TIME = (2026, 9, 6, 0, 0, 0)  # deterministic zip member timestamps
 
@@ -111,6 +119,8 @@ def cmd_regen(a: argparse.Namespace) -> int:
         print(f"Dataset checkout is {head}, manifest needs {man['generator_commit_sha']}", file=sys.stderr)
         return 2
     cfg = load_config(str(ds / "config" / "benchmark-v1.yaml"))
+    if a.set == "unseen":
+        return _regen_unseen(a, ds, man, cfg)
     sel = _selection_entries(a, ds, man)
     want = expected_files(man, check)
     out = Path(a.out)
@@ -149,6 +159,134 @@ def cmd_regen(a: argparse.Namespace) -> int:
     if bad:
         print(f"{bad} regenerated files differ from the frozen hashes", file=sys.stderr)
         return 1
+    return 0
+
+
+def _unseen_model_check(ds: Path, man: dict) -> None:
+    got = sha((ds / "config" / "benchmark-v1.yaml").read_bytes())
+    if got != man["model_config_sha256"]:
+        raise SystemExit("Dataset model configuration differs from the one frozen in the unseen manifest")
+    src = json.loads((ds / "manifests" / "source-workflows-unseen-v1.json").read_text(encoding="utf-8"))
+    if src["content_sha256"] != man["source_manifest_content_sha256"]:
+        raise SystemExit("unseen source manifest differs from the frozen one")
+
+
+def _write_group(out: Path, files: dict[str, bytes]) -> None:
+    for rel, b in files.items():
+        p = out / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b)
+
+
+def _regen_unseen(a: argparse.Namespace, ds: Path, man: dict, cfg: dict) -> int:
+    from generator.unseen import build_group  # noqa: E402
+    _unseen_model_check(ds, man)
+    want = expected_files(man, "sha256")
+    out = Path(a.out)
+    groups = shard_groups(man, a.shards)[a.shard]
+    print(f"set unseen, shard {a.shard}/{a.shards}: {len(groups)} base instances, "
+          f"{sum(len(g) for _, g in groups)} QoS instances, checked by sha256")
+    bad = 0
+    for base_id, group in groups:
+        if any(e["split"] != UNSEEN_SPLIT for e in group):
+            raise SystemExit("refusing to materialize a non-unseen entry")
+        t0 = time.time()
+        files = build_group(ds / "source_workflows", group, cfg)
+        mism = sum(sha(b) != want[rel] for rel, b in files.items())
+        bad += mism
+        _write_group(out, files)
+        print(f"  {base_id}: {len(group)} QoS, {time.time() - t0:.1f}s, {'ok' if mism == 0 else f'{mism} MISMATCH'}",
+              flush=True)
+    if bad:
+        print(f"{bad} regenerated files differ from the frozen hashes", file=sys.stderr)
+        return 1
+    return 0
+
+
+# --------------------------------------------------------------------------- freeze (unseen only)
+def cmd_freeze_build(a: argparse.Namespace) -> int:
+    """Build one shard of the unseen set from the Dataset sources and record every file hash.
+
+    Runs only while manifests/unseen-v1.json does not exist yet (the freeze happens once).
+    """
+    ds = Path(a.dataset_repo).resolve()
+    sys.path.insert(0, str(ds))
+    from generator.config import load_config  # noqa: E402
+    from generator.unseen import build_group, enumerate_entries, load_unseen_config  # noqa: E402
+
+    if (ROOT / "manifests" / SETS["unseen"]["manifest"]).exists():
+        raise SystemExit("manifests/unseen-v1.json already exists: the unseen set is frozen; use regen")
+    unseen = load_unseen_config(ds / "config" / "unseen-v1.yaml")
+    cfg = load_config(str(ds / unseen["model_config"]))
+    src = json.loads((ds / "manifests" / "source-workflows-unseen-v1.json").read_text(encoding="utf-8"))
+    entries = enumerate_entries(unseen, cfg, src)
+    groups = shard_groups({"entries": entries}, a.shards)[a.shard]
+    out = Path(a.out)
+    hashes: dict[str, dict] = {}
+    print(f"freeze unseen shard {a.shard}/{a.shards}: {len(groups)} base instances")
+    for base_id, group in groups:
+        t0 = time.time()
+        files = build_group(ds / "source_workflows", group, cfg)
+        _write_group(out, files)
+        for rel, b in files.items():
+            hashes[rel] = {"sha256": sha(b), "content_sha256": digest(b, "content_sha256")}
+        print(f"  {base_id}: {len(group)} QoS, {time.time() - t0:.1f}s", flush=True)
+    (out / "hashes.json").write_text(json.dumps(hashes, sort_keys=True, indent=0) + "\n", encoding="utf-8")
+    return 0
+
+
+def cmd_freeze_merge(a: argparse.Namespace) -> int:
+    """Write the frozen unseen manifest from all shard hash lists (one-time freeze)."""
+    ds = Path(a.dataset_repo).resolve()
+    sys.path.insert(0, str(ds))
+    from generator.canonical import content_sha256  # noqa: E402
+    from generator.config import load_config  # noqa: E402
+    from generator.unseen import enumerate_entries, load_unseen_config  # noqa: E402
+
+    target = ROOT / "manifests" / SETS["unseen"]["manifest"]
+    if target.exists():
+        raise SystemExit("manifests/unseen-v1.json already exists: refusing to overwrite a freeze")
+    unseen = load_unseen_config(ds / "config" / "unseen-v1.yaml")
+    cfg = load_config(str(ds / unseen["model_config"]))
+    src_path = ds / "manifests" / "source-workflows-unseen-v1.json"
+    src = json.loads(src_path.read_text(encoding="utf-8"))
+    entries = enumerate_entries(unseen, cfg, src)
+    hashes: dict[str, dict] = {}
+    for f in sorted(glob.glob(a.inputs)):
+        hashes.update(json.loads(Path(f).read_text(encoding="utf-8")))
+    bases = sorted({e["base_instance_id"] for e in entries})
+    missing = [e["path"] for e in entries if e["path"] not in hashes]
+    missing += [f"base/{b}.json" for b in bases if f"base/{b}.json" not in hashes]
+    if missing:
+        print("\n".join(missing[:20]), file=sys.stderr)
+        raise SystemExit(f"{len(missing)} files missing from the shard hash lists")
+    head = subprocess.run(["git", "-C", str(ds), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    man = {
+        "schema_version": 1,
+        "selection_id": unseen["set_id"],
+        "scope": ("Unseen source DAGs: 35 new Bharathi r04 replicates checksum-distinct from the frozen v1 "
+                  "r01-r03, and 48 WfCommons/WfChef DAGs of four families absent from v1 (1000genome, "
+                  "srasearch and blast at all seven sizes; soykb at 200/400/800, the sizes it can produce "
+                  "exactly). Full factorial with 3 resource scales x 3 scenarios x 3 QoS profiles. "
+                  "Frozen before any scheduler ran on it."),
+        "generator_commit_sha": head,
+        "model_config_sha256": sha((ds / unseen["model_config"]).read_bytes()),
+        "unseen_config_sha256": sha((ds / "config" / "unseen-v1.yaml").read_bytes()),
+        "source_manifest_content_sha256": src["content_sha256"],
+        "source_count": src["artifact_count"],
+        "instance_count": len(entries),
+        "base_instance_count": len(bases),
+        "split_counts": {UNSEEN_SPLIT: len(entries)},
+        "hash_note": "sha256 = raw bytes; regeneration must be byte-identical. content_sha256 = sha256 of "
+                     "generator.canonical.canonical_json_bytes(parsed JSON).",
+        "entries": [{**e, **hashes[e["path"]]} for e in entries],
+        "base_entries": [{"base_instance_id": b, "path": f"base/{b}.json", **hashes[f"base/{b}.json"]}
+                         for b in bases],
+    }
+    man["content_sha256"] = content_sha256(man)
+    target.write_text(json.dumps(man, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"froze {len(entries)} unseen instances over {len(bases)} bases from {src['artifact_count']} "
+          f"sources at Dataset {head}; manifest content_sha256 {man['content_sha256']}")
     return 0
 
 
@@ -231,10 +369,19 @@ def main() -> int:
     f = sub.add_parser("fetch")
     f.add_argument("--out", default="data/dev")
     f.add_argument("--repo")
+    fb = sub.add_parser("freeze-build")
+    fb.add_argument("--dataset-repo", required=True)
+    fb.add_argument("--shard", type=int, default=0)
+    fb.add_argument("--shards", type=int, default=1)
+    fb.add_argument("--out", required=True)
+    fm = sub.add_parser("freeze-merge")
+    fm.add_argument("--dataset-repo", required=True)
+    fm.add_argument("--inputs", required=True, help="glob of shard hashes.json files")
     for s in (r, k, v, f):
         s.add_argument("--set", choices=sorted(SETS), default="dev")
     a = p.parse_args()
-    return {"regen": cmd_regen, "pack": cmd_pack, "verify": cmd_verify, "fetch": cmd_fetch}[a.cmd](a)
+    return {"regen": cmd_regen, "pack": cmd_pack, "verify": cmd_verify, "fetch": cmd_fetch,
+            "freeze-build": cmd_freeze_build, "freeze-merge": cmd_freeze_merge}[a.cmd](a)
 
 
 if __name__ == "__main__":
