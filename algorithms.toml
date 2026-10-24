@@ -121,3 +121,53 @@ class = "DCRV2SparingScheduler"
 role = "proposed"
 enabled = false
 sources = ["ifc_algorithms", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+# Predeclared component ablations of DCR-v1 Admission (docs/proposed/ABLATIONS_PAPER1.md).
+# role = ablation; enabled = false keeps them out of "all" and out of the main reports.
+[dcr-abl-control]
+label = "Ablation: control (= DCR-v1 Admission)"
+module = "algorithms.dcr_ablations"
+class = "ControlScheduler"
+role = "ablation"
+enabled = false
+sources = ["algorithms/dcr_ablations", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+[dcr-abl-no-reserve]
+label = "Ablation: no priced reserve"
+module = "algorithms.dcr_ablations"
+class = "NoReserveScheduler"
+role = "ablation"
+enabled = false
+sources = ["algorithms/dcr_ablations", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+[dcr-abl-zero-prices]
+label = "Ablation: zero prices"
+module = "algorithms.dcr_ablations"
+class = "ZeroPricesScheduler"
+role = "ablation"
+enabled = false
+sources = ["algorithms/dcr_ablations", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+[dcr-abl-time-rank]
+label = "Ablation: time-only ranking"
+module = "algorithms.dcr_ablations"
+class = "TimeRankScheduler"
+role = "ablation"
+enabled = false
+sources = ["algorithms/dcr_ablations", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+[dcr-abl-budget-rank]
+label = "Ablation: budget-only ranking"
+module = "algorithms.dcr_ablations"
+class = "BudgetRankScheduler"
+role = "ablation"
+enabled = false
+sources = ["algorithms/dcr_ablations", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+[dcr-abl-weighted-rank]
+label = "Ablation: weighted-sum ranking"
+module = "algorithms.dcr_ablations"
+class = "WeightedRankScheduler"
+role = "ablation"
+enabled = false
+sources = ["algorithms/dcr_ablations", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]

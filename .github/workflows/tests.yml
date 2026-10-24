@@ -26,3 +26,5 @@ jobs:
         run: python -m pytest -q tests/test_harness.py
       - name: Historical algorithm tests
         run: python -m pytest -q tests/historical
+      - name: Ablation faithfulness tests
+        run: python -m pytest -q tests/test_dcr_ablations.py
