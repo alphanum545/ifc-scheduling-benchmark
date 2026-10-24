@@ -7,9 +7,9 @@ its SHA-256:
   dev        manifests/dev-v1.json        160 development instances of the 200-input pilot
   expansion  manifests/expansion-v1.json  1,890 instances (630 new base configurations x 3 QoS)
                                            of the frozen ifc-expansion-selection-v1 cohort
-  unseen     manifests/unseen-v1.json     2,025 instances of ifc-unseen-v1: 75 source DAGs no
+  unseen     manifests/unseen-v1.json     2,241 instances of ifc-unseen-v1: 83 source DAGs no
                                            scheduler was designed on (35 new Bharathi replicates,
-                                           40 WfCommons DAGs of 3 new families) x 27 configurations
+                                           48 WfCommons DAGs of 4 new families) x 27 configurations
 
 The public repository ships no instance files. Each set is regenerated from the public
 Dataset repository (alphanum545/Dataset) at the generator commit recorded in its manifest
@@ -265,8 +265,9 @@ def cmd_freeze_merge(a: argparse.Namespace) -> int:
         "schema_version": 1,
         "selection_id": unseen["set_id"],
         "scope": ("Unseen source DAGs: 35 new Bharathi r04 replicates checksum-distinct from the frozen v1 "
-                  "r01-r03, and 40 WfCommons/WfChef DAGs of three families absent from v1 (1000genome, "
-                  "srasearch, soykb). Full factorial with 3 resource scales x 3 scenarios x 3 QoS profiles. "
+                  "r01-r03, and 48 WfCommons/WfChef DAGs of four families absent from v1 (1000genome, "
+                  "srasearch and blast at all seven sizes; soykb at 200/400/800, the sizes it can produce "
+                  "exactly). Full factorial with 3 resource scales x 3 scenarios x 3 QoS profiles. "
                   "Frozen before any scheduler ran on it."),
         "generator_commit_sha": head,
         "model_config_sha256": sha((ds / unseen["model_config"]).read_bytes()),

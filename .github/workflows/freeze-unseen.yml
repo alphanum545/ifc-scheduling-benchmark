@@ -1,6 +1,6 @@
 name: Freeze unseen set
 
-# One-time freeze of the ifc-unseen-v1 evaluation set (2,025 instances, 75 unseen DAGs).
+# One-time freeze of the ifc-unseen-v1 evaluation set (2,241 instances, 83 unseen DAGs).
 # Builds every base, calibration and QoS instance from the Dataset sources at `dataset_ref`
 # with the unchanged v1 generator code path, records the SHA-256 of every file, and commits
 # manifests/unseen-v1.json. No scheduler runs here. It refuses to run if the manifest already

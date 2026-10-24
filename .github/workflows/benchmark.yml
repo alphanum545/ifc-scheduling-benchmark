@@ -14,7 +14,7 @@ on:
         description: "Proposed algorithm to highlight (gains/losses computed against it)"
         default: "dcr-v1-admission"
       set:
-        description: "Instance set: dev (160), expansion (1,890) or unseen (2,025; final test, run once)"
+        description: "Instance set: dev (160), expansion (1,890) or unseen (2,241; final test, run once)"
         default: "dev"
         type: choice
         options: [dev, expansion, unseen]

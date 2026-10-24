@@ -323,7 +323,7 @@ def main() -> int:
     pl.add_argument("--algos", default="all")
     pl.add_argument("--set", default="dev", choices=sorted(SET_MANIFESTS),
                     help="dev (160 pilot development cases), expansion (1,890 frozen expansion cases) "
-                         "or unseen (2,025 frozen unseen-DAG cases)")
+                         "or unseen (2,241 frozen unseen-DAG cases)")
     pl.add_argument("--suite", default="all", help="dev set only: smoke (5), core (24) or all (160)")
     pl.add_argument("--families", default="all")
     pl.add_argument("--tasks", default="all")
