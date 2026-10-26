@@ -66,6 +66,13 @@ role = "comparator"
 sources = ["algorithms/bddc_bdc", "algorithms/common", "algorithms/__init__.py"]
 reference = ["primary:bdc_ifc_w05", "dcr:bdc_ifc_w05", "expansion:bdc_ifc_w05"]
 
+[bdcws]
+label = "BDCWS"
+module = "algorithms.bdcws"
+class = "BDCWSScheduler"
+role = "comparator"
+sources = ["algorithms/bdcws", "algorithms/common", "algorithms/__init__.py"]
+
 [dcr-v0]
 label = "DCR-v0"
 module = "algorithms.dcr_ifc"
