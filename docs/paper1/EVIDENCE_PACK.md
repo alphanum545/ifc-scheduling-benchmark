@@ -194,6 +194,44 @@ The harness is faithful: the control variant's schedule equals DCR-v1 Admission'
 
 The dual-price tightening and the specific minimax form should be presented as design choices with honest ablation results, not as sources of the gain.
 
+## 6c. Scoring ablation result (run 2026-10-27, protocol predeclared in the `ABLATIONS_PAPER1.md` addendum)
+
+The variant `dcr-abl-bdc-score` keeps DCR-v1 Admission's deadline-aware priced-reserve admission unchanged and ranks
+the admitted candidates by BDC's Quality (ω = 1/2; SDL = latest finish b_i, RB = whole remaining budget) instead of
+DCR's minimax slack loss. The harness is faithful: `dcr-abl-scoring-control` equals DCR-v1 Admission's stored schedule
+on **160/160** dev and **1,890/1,890** expansion instances. There are no invalid runs. The runs are reports
+`ablation-scoring-dev` and `ablation-scoring-expansion`.
+
+| | Dev joint | Expansion joint | Δ vs control (exp.) | Only control / only variant (exp.) | p exact (Holm, 6 variants) |
+|---|---:|---:|---:|---:|---:|
+| Control = DCR-v1 Admission | 140 (87.5%) | 1,629 (86.2%) | | | |
+| **DCR reserve + BDC Quality ranking** | **148 (92.5%)** | **1,732 (91.6%)** | **+5.4 pp** | **10 / 113** | 3.1e-23 (≈1.2e-22) |
+
+- **By QoS (expansion):**
+  - tight 70.6% → 81.3% (8 / 75, p = 9.1e-15);
+  - moderate 87.9% → 93.7% (2 / 38, p = 1.5e-9);
+  - relaxed 100% for both.
+- **Dev agrees:** 0 / 8, p = 0.0078.
+- **Budget:** met in 100% of cases.
+- **Cost of the change, where both are feasible:** median makespan ratio 1.058, median cost ratio 0.992. The variant finishes slightly later and spends slightly less.
+
+**Reading, as fixed in the addendum:** the variant is significantly *better*, not worse. So DCR's slack-relative minimax
+scoring is **not** a source of gain. The contribution that survives every ablation is the **deadline-aware reserve
+admission** (§6b: −2.6 pp without it). It works better when paired with a conventional weighted time–cost quality than
+with DCR's own scoring. This is consistent with §6b item 4 (weighted sum +1.6 pp over minimax) and with BDCWS beating
+DCR-v1 at moderate QoS (§10, BDCWS row).
+
+**Consequences:**
+1. **Remove the scoring claim.** The paper must not claim the slack-consumption scoring as a contribution. §6b's
+   "balancing normalized slack consumption is the core mechanism" holds only in the weak sense that a ranking must
+   balance time and cost (single-criterion ranking collapses). DCR's particular normalization is not the best one.
+2. **The reserve is portable.** It is a plug-in admission test: it improves on BDC's own ranking by a wide margin,
+   91.6% against BDC's 75.5% on expansion.
+3. **Keep the headline frozen.** As the protocol requires, DCR-v1 Admission is not changed in response. Adopting
+   "reserve + BDC Quality" as the headline method would be a post-hoc design choice made on dev/expansion data. The
+   unseen set has already been used for the frozen algorithms, so it is no longer a clean test for a new choice. This is
+   a decision for the authors (see §10).
+
 ## 7. Novelty: bounded check and the claim to make
 
 Search done: deadline-and-budget workflow heuristics, cheapest-remaining-cost reserves, dual-price/Lagrangian bounds in DAG scheduling, minimax slack ranking, IFC/fog 2024–2026. The comparator audits in `docs/paper_audits/` were cross-read. The check was time-boxed, not exhaustive.
@@ -374,5 +412,6 @@ The figures are joint-feasibility percentages of all dev instances, averaged ove
 | Clean expansion runtime study | Optional (the AWS dev study covers v1) |
 | 40-instance holdout | Replaced by the unseen set. Run it only if the S3 checksums are recovered |
 | Two final novelty spot checks (§7) | **Done** (§7b) |
-| **Scoring ablation**: DCR reserve with BDC-style normalization instead of slack-relative losses (§7b) | **Pending.** Agreed; run when the GitHub runners are free (dev + expansion, same protocol as §6b) |
+| **Scoring ablation**: DCR reserve with BDC-style normalization instead of slack-relative losses (§7b) | **Done 2026-10-27** (§6c). The variant is significantly better (+5.4 pp on expansion), so the scoring is not a contribution; the headline decision is open |
+| **BDCWS comparator** (Cluster Computing 2023), from the 2026-10-26 literature audit | **Done 2026-10-26/27**, reproduced in CI. Unseen 73.1% vs DCR-v1 85.0%; BDCWS is better at moderate QoS and on blast. Reports `*-all-bdcws` |
 | Writing | Next |
