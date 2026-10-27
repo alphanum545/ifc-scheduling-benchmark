@@ -27,6 +27,7 @@ import json
 import os
 import platform
 import statistics
+import subprocess
 import sys
 import time
 import tomllib
@@ -34,7 +35,7 @@ import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-STORE = ROOT / "results" / "store.csv"  # legacy single-file store, read until migrated
+STORE = ROOT / "results" / "store.csv"  # legacy single-file store; now a header-only placeholder
 STORE_DIR = ROOT / "results" / "store"  # one CSV per algorithm
 WORK = ROOT / ".work"
 sys.path.insert(0, str(ROOT))
@@ -151,7 +152,8 @@ def _write_csv(rows: list[dict], path: Path) -> None:
 
 def write_store(rows: list[dict], path: Path | None = None) -> None:
     """Write runs. With `path`, one CSV. Otherwise the whole store, one CSV per algorithm in
-    results/store/; shards of algorithms no longer present and the legacy single file are removed."""
+    results/store/; shards of algorithms no longer present are removed and the legacy single file is
+    emptied to its header."""
     if path is not None:
         _write_csv(rows, path)
         return
@@ -164,8 +166,9 @@ def write_store(rows: list[dict], path: Path | None = None) -> None:
     for shard in STORE_DIR.glob("*.csv"):
         if shard.stem not in by_algo:
             shard.unlink()
-    if STORE.exists():
-        STORE.unlink()
+    # The legacy file is kept as a header-only placeholder (no rows): the Benchmark workflow
+    # stages results/store.csv by name, and its first migration commit replaces the 100 MB file.
+    _write_csv([], STORE)
 
 
 # --------------------------------------------------------------------------- plan
@@ -347,6 +350,9 @@ def cmd_merge(a: argparse.Namespace) -> int:
             rows[tuple(r[k] for k in KEY)] = r
             new += 1
     write_store(list(rows.values()))
+    if (ROOT / ".git").exists():
+        # stage the per-algorithm files (new algorithms add new files); the workflow commits the index
+        subprocess.run(["git", "add", "-A", str(STORE_DIR.relative_to(ROOT))], cwd=ROOT, check=True)
     print(f"merged {new} new rows; store now holds {len(rows)} rows")
     return 0
 

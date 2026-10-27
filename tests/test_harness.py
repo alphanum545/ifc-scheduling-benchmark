@@ -127,7 +127,7 @@ def test_store_migrates_from_the_legacy_file_to_per_algorithm_files(tmp_path, mo
     rows = bench.read_store()
     assert len(rows) == 6 and [r for r in rows if r["instance_id"] == "i0" and r["algo"] == "bdc"][0]["status"] == "error"
     bench.write_store(rows)
-    assert not (tmp_path / "store.csv").exists()
+    assert bench.read_store(tmp_path / "store.csv") == []  # header-only placeholder
     assert sorted(p.name for p in (tmp_path / "store").glob("*.csv")) == ["bdc.csv", "dbcs.csv"]
     assert sorted((r["algo"], r["instance_id"], r["status"]) for r in bench.read_store()) == sorted(
         (r["algo"], r["instance_id"], r["status"]) for r in rows)
