@@ -75,7 +75,8 @@ and attached to the run as a downloadable artifact.
 
 Comparisons use only cases where **every** selected algorithm produced a valid, deterministic schedule, so all
 algorithms are compared on the same cases. The Validity table says what was left out and why. All runs ever
-made are kept in `results/store.csv`. A report can be rebuilt at any time without rerunning anything.
+made are kept in `results/store/`, one CSV per algorithm (GitHub rejects single files over 100 MB). A report can be
+rebuilt at any time without rerunning anything.
 
 ---
 
@@ -156,7 +157,7 @@ tools/data.py                regenerate / pack / fetch / verify the dataset
 tools/bench.py               plan, run, merge
 tools/report.py              tables and figures
 tools/verify_replay.py       exact-match check against reference/
-results/store.csv            every run ever made
+results/store/<algo>.csv     every run ever made, one file per algorithm
 results/reports/<name>/      reports
 docs/paper_audits/           comparator paper audits and adaptation decisions
 docs/proposed/               DCR v0/v1 specifications

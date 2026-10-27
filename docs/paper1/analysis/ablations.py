@@ -1,4 +1,4 @@
-"""Ablation analysis from results/store.csv (no scheduler is run).
+"""Ablation analysis from results/store/ (no scheduler is run).
 
 Usage: python3 ablations.py <bench_repo_dir> <out_md>
 """
@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 
 from scipy.stats import binomtest
+
+from store_rows import load_store_rows
 
 REPO, OUT = Path(sys.argv[1]), Path(sys.argv[2])
 CONTROL = "dcr-abl-control"
@@ -29,7 +31,7 @@ def holm(p):
     return adj
 
 
-rows = list(csv.DictReader(open(REPO / "results/store.csv")))
+rows = load_store_rows(REPO)
 md = []
 for set_name in ("dev", "expansion"):
     ids = {x["instance_id"] for x in csv.DictReader(open(REPO / f"results/reports/{set_name}-all/results.csv"))}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that runs in results/store.csv reproduce the historical results exactly.
+"""Check that runs in the store (results/store/) reproduce the historical results exactly.
 
 The historical results were produced before this repository existed (AWS Lambda,
 ap-south-2, Python 3.11, September-October 2026) by the same algorithm source files.
@@ -94,7 +94,7 @@ def main() -> int:
     rows = [r for r in read_store() if r["status"] == "ok" and r["algo"] in reg
             and r["source_sha256"] == reg[r["algo"]]["source_sha256"]]
     lines = ["# Replay against historical results", "",
-             "Each run in `results/store.csv` made with the current source is compared field by field with the stored",
+             "Each run in the store (`results/store/`) made with the current source is compared field by field with the stored",
              "historical result for the same algorithm version and instance (schedule identity, makespan, cost, energy,",
              "feasibility). Runtimes are not compared.", "",
              "| Algorithm | Reference set | Instances compared | Exact matches | Mismatches |",

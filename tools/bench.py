@@ -7,7 +7,7 @@
 
 Work is split by *instance*: every algorithm selected for an instance runs on the same
 machine, in an order that rotates between repetitions, so runtime ratios are paired.
-Only runs not already in results/store.csv (same algorithm version, same source hash,
+Only runs not already in the store, results/store/ (same algorithm version, same source hash,
 same instance, same repetition count) are planned, unless --force is given.
 
 Policy runtime is timed around Scheduler.schedule() only. The schedule is then built and
@@ -27,6 +27,7 @@ import json
 import os
 import platform
 import statistics
+import subprocess
 import sys
 import time
 import tomllib
@@ -34,7 +35,8 @@ import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-STORE = ROOT / "results" / "store.csv"
+STORE = ROOT / "results" / "store.csv"  # legacy single-file store; now a header-only placeholder
+STORE_DIR = ROOT / "results" / "store"  # one CSV per algorithm
 WORK = ROOT / ".work"
 sys.path.insert(0, str(ROOT))
 
@@ -116,22 +118,57 @@ def select_instances(a: argparse.Namespace) -> list[dict]:
 
 
 # --------------------------------------------------------------------------- store
-def read_store(path: Path | None = None) -> list[dict]:
-    path = path or STORE
+def _read_csv(path: Path) -> list[dict]:
     if not path.exists():
         return []
     with open(path, newline="", encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
 
 
-def write_store(rows: list[dict], path: Path | None = None) -> None:
-    path = path or STORE
+def read_store(path: Path | None = None) -> list[dict]:
+    """All stored runs. With `path`, read that single CSV (shard outputs, tests).
+
+    The store is one CSV per algorithm in results/store/ (GitHub rejects files over 100 MB).
+    The legacy single file results/store.csv is still read while it exists; a per-algorithm
+    row with the same (algo, source_sha256, instance_id) key replaces the legacy row.
+    """
+    if path is not None:
+        return _read_csv(path)
+    rows = {tuple(r[k] for k in KEY): r for r in _read_csv(STORE)}
+    for shard in sorted(STORE_DIR.glob("*.csv")):
+        for r in _read_csv(shard):
+            rows[tuple(r[k] for k in KEY)] = r
+    return list(rows.values())
+
+
+def _write_csv(rows: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = sorted(rows, key=lambda r: (r["algo"], r["instance_id"]))
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=FIELDS, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
+
+
+def write_store(rows: list[dict], path: Path | None = None) -> None:
+    """Write runs. With `path`, one CSV. Otherwise the whole store, one CSV per algorithm in
+    results/store/; shards of algorithms no longer present are removed and the legacy single file is
+    emptied to its header."""
+    if path is not None:
+        _write_csv(rows, path)
+        return
+    by_algo: dict[str, list[dict]] = {}
+    for r in rows:
+        by_algo.setdefault(r["algo"], []).append(r)
+    STORE_DIR.mkdir(parents=True, exist_ok=True)
+    for algo, group in by_algo.items():
+        _write_csv(group, STORE_DIR / f"{algo}.csv")
+    for shard in STORE_DIR.glob("*.csv"):
+        if shard.stem not in by_algo:
+            shard.unlink()
+    # The legacy file is kept as a header-only placeholder (no rows): the Benchmark workflow
+    # stages results/store.csv by name, and its first migration commit replaces the 100 MB file.
+    _write_csv([], STORE)
 
 
 # --------------------------------------------------------------------------- plan
@@ -313,6 +350,9 @@ def cmd_merge(a: argparse.Namespace) -> int:
             rows[tuple(r[k] for k in KEY)] = r
             new += 1
     write_store(list(rows.values()))
+    if (ROOT / ".git").exists():
+        # stage the per-algorithm files (new algorithms add new files); the workflow commits the index
+        subprocess.run(["git", "add", "-A", str(STORE_DIR.relative_to(ROOT))], cwd=ROOT, check=True)
     print(f"merged {new} new rows; store now holds {len(rows)} rows")
     return 0
 
