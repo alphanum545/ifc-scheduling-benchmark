@@ -16,6 +16,8 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import binomtest
 
+from store_rows import load_store_rows
+
 REPO, OUT = Path(sys.argv[1]), Path(sys.argv[2])
 OUT.mkdir(parents=True, exist_ok=True)
 WHAT = sys.argv[3:] or ["tuning", "grid", "robust", "exact", "unseen"]
@@ -26,10 +28,9 @@ MAIN12 = ["dcr-v3-rescue", "dcr-v1-admission", "dcr-v1", "dcr-v0", "dcr-v0-opt",
 
 def load_store():
     d = defaultdict(dict)
-    with open(REPO / "results/store.csv", newline="") as fh:
-        for x in csv.DictReader(fh):
-            if x["status"] == "ok" and x["valid"] == "True":
-                d[x["algo"]][x["instance_id"]] = x
+    for x in load_store_rows(REPO):
+        if x["status"] == "ok" and x["valid"] == "True":
+            d[x["algo"]][x["instance_id"]] = x
     return d
 
 
