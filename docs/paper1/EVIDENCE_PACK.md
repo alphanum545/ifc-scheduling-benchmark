@@ -228,9 +228,68 @@ DCR-v1 at moderate QoS (§10, BDCWS row).
 2. **The reserve is portable.** It is a plug-in admission test: it improves on BDC's own ranking by a wide margin,
    91.6% against BDC's 75.5% on expansion.
 3. **Keep the headline frozen.** As the protocol requires, DCR-v1 Admission is not changed in response. Adopting
-   "reserve + BDC Quality" as the headline method would be a post-hoc design choice made on dev/expansion data. The
-   unseen set has already been used for the frozen algorithms, so it is no longer a clean test for a new choice. This is
-   a decision for the authors (see §10).
+   "reserve + BDC Quality" as the headline method would be a post-hoc design choice made on dev/expansion data.
+   *Correction 2026-10-27:* the unseen set was never used for any ranking choice, so it is a clean confirmation test for
+   this choice. The authors chose to freeze the variant as DCR-v4 and confirm it there once; see §6d.
+
+## 6d. DCR-v4 confirmation on the unseen set (run once 2026-10-27; protocol `docs/proposed/DCR_V4_FREEZE_2026-10-27.md`)
+
+DCR-v4 = DCR-v1 Admission's deadline-aware reserve admission + BDC's weighted Quality ranking (ω = 1/2). It was frozen
+before this run. Its selection among five rankings on dev and expansion is disclosed in the freeze document. Identity
+holds: the dev schedules equal the stored `dcr-abl-bdc-score` schedules on 160/160 instances. The unseen run is the
+first and only time DCR-v4 has seen these 2,241 instances (report `unseen-all-v4`). It produced 0 invalid runs and
+met the budget in 2,241/2,241 cases.
+
+**Primary outcome (predeclared): DCR-v4 against DCR-v1 Admission, unseen.**
+
+| | Joint feasible | Only this one solves | Exact McNemar |
+|---|---:|---:|---:|
+| **DCR-v4** | **2,006 (89.5%)** | **106** | p = 1.0e-25 |
+| DCR-v1 Admission | 1,905 (85.0%) | 5 | |
+
+**Decision rule applied:** DCR-v4 is not significantly worse; it is significantly better. **So DCR-v4 is adopted as the
+paper's headline method.** DCR-v1 Admission is reported as the base variant, and the ranking result (§6c) as the
+ablation.
+
+**Secondary outcomes (unseen, DCR-v4 against each comparator, Holm over five):**
+- BDCWS 73.1%: 498 vs 130, p = 1.2e-51;
+- BDC 71.8%: 428 vs 32, p = 3.0e-89;
+- BDSD 57.7%: 800 vs 87;
+- DBCS 51.9%: 844 vs 0;
+- BDHEFT 46.8%: 957 vs 0.
+
+All are p < 1e-50.
+
+**By QoS (unseen):**
+
+| QoS | DCR-v4 | DCR-v1 | BDCWS | BDC |
+|---|---:|---:|---:|---:|
+| tight | 616/747 (82.5%) | 547 (73.2%) | 194 (26.0%) | 292 (39.1%) |
+| moderate | 643/747 (86.1%) | 611 (81.8%) | **697 (93.3%)** | 571 (76.4%) |
+| relaxed | 747/747 | 747 | 747 | 747 |
+
+**Moderate QoS remains a weakness.** BDCWS is still ahead of DCR-v4 at moderate QoS, so report it.
+
+**By family (DCR-v4 / DCR-v1 / BDCWS):**
+- **DCR-v4 is ahead of DCR-v1 in every family.**
+- 1000genome 306/288/255, blast 342/319/**375**, cybershake 181/175/110, genome 176/169/141, ligo 189/187/120,
+  montage 154/135/139, sipht 164/163/110, soykb 149/134/113, srasearch 345/335/275.
+- **DCR-v4 is ahead of BDCWS in every family except blast.** Report blast.
+
+**Quality where both DCR-v4 and DCR-v1 are feasible (1,900 cases):** median makespan ratio 1.049, cost ratio 0.997.
+
+**DCR-v3 Rescue (built on v1)** still solves more: 2,208 (98.5%), with 210 cases only v3 solves and 8 only v4 solves.
+Its rescue portfolio is built on v1's ranking, so the v3 decision in the freeze document's follow-ups is now due.
+
+**Runtime caveat.** The report gives DCR-v4 a median of 821 ms, 0.52× BDC, p95 1.34×. DCR-v4's rows come from a
+different CI run than BDC's, so the per-case pairing is across machines. For a clean ratio, run a dedicated runtime
+study (`workers = 1`, DCR-v4 and BDC in the same run), as was done for v1.
+
+**Follow-ups now due (freeze document):**
+1. tightness grid, robustness noise study and exact CP-SAT check for DCR-v4;
+2. the DCR-v3 decision;
+3. a dedicated runtime study;
+4. updated method section, novelty claim and tables.
 
 ## 7. Novelty: bounded check and the claim to make
 
@@ -414,4 +473,5 @@ The figures are joint-feasibility percentages of all dev instances, averaged ove
 | Two final novelty spot checks (§7) | **Done** (§7b) |
 | **Scoring ablation**: DCR reserve with BDC-style normalization instead of slack-relative losses (§7b) | **Done 2026-10-27** (§6c). The variant is significantly better (+5.4 pp on expansion), so the scoring is not a contribution; the headline decision is open |
 | **BDCWS comparator** (Cluster Computing 2023), from the 2026-10-26 literature audit | **Done 2026-10-26/27**, reproduced in CI. Unseen 73.1% vs DCR-v1 85.0%; BDCWS is better at moderate QoS and on blast. Reports `*-all-bdcws` |
-| Writing | Next |
+| **DCR-v4 freeze and unseen confirmation** (reserve admission + quality ranking) | **Done 2026-10-27** (§6d). Unseen 89.5% vs DCR-v1 85.0% (106 vs 5, p = 1e-25), so **adopted as headline**. Follow-ups due: grid, robustness, exact check and runtime study for v4; the v3 decision |
+| Writing | Next (after the follow-ups or in parallel) |
