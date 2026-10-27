@@ -48,3 +48,47 @@ Ties after the replaced primary key are broken by (finish, cost, resource), as i
 - **Control:** on 150 random synthetic instances, control reproduces DCR-v1 Admission's task order, mapping, planned-assignment hash, makespan, cost and fallback statistics exactly.
 - **Variants:** every variant returns a complete mapping, never exceeds the budget when Σ cmin ≤ B, and differs from control on at least one instance.
 - **Benchmark run:** the control's schedule on every dev and expansion instance must equal DCR-v1 Admission's stored schedule.
+
+## Addendum, 2026-10-27: scoring ablation (predeclared before any result)
+
+Agreed in the evidence pack (§7b, status table). It was deferred until the GitHub runners were free.
+
+**Question.** §6b showed that the deadline-aware reserve matters: no-reserve is −2.6 pp overall and −7.5 pp at
+tight QoS. §6b did not separate the effect of DCR's *slack-relative* scoring from BDC-style normalization. BDCWS
+(added 2026-10-26) is the mirror image: a deadline-blind reserve with deadline-aware scoring. This ablation keeps
+DCR's reserve and swaps only the scoring.
+
+**Code.** `algorithms/dcr_ablations_scoring/` is a separate copy of the ablation step loop, so the 2026-10-24
+ablation sources, hashes and stored results are unchanged.
+
+| ID | Component replaced | Definition |
+|---|---|---|
+| `dcr-abl-scoring-control` | none | Must reproduce DCR-v1 Admission decisions exactly |
+| `dcr-abl-bdc-score` | minimax slack ranking (M) | Admitted candidates are ranked by BDC's Quality, as implemented in `algorithms/bddc_bdc` with ω = 1/2. TQ = (SDL − FT − FT_min)/SDL, with SDL = the task's latest finish b_i (DCR's counterpart of BDC's level sub-deadline). CQ = (RB − TC − TC_min)/RB, with RB = B − spent (BDC's whole remaining budget; CQ = 0 if RB = 0). The highest (TQ + CQ)/2 wins; ties (finish, cost, resource) |
+
+**Kept unchanged:**
+- priced-reserve admission, with the child-arrival correction and the three price vectors;
+- the raw budget invariant;
+- the time screens;
+- the task priority;
+- the fallback.
+
+**Runs and analysis.** These are the same as above:
+- sets `dev` and `expansion`;
+- 1 repetition;
+- exact McNemar test against `dcr-abl-scoring-control`, with secondary outcomes as above.
+
+Holm correction now covers six variants. All results will be reported whatever they show, and DCR-v1 Admission is
+not changed in response.
+
+**How the result will be read:**
+- If `dcr-abl-bdc-score` is significantly worse than control, DCR's slack-relative scoring contributes beyond the
+  reserve.
+- If it is not significantly different, the gain is attributed to the reserve, and the paper must not claim the
+  scoring as a source of gain.
+
+**Faithfulness checks (`tests/test_dcr_ablations_scoring.py`):**
+- the control equals DCR-v1 Admission on 150 random instances;
+- the variant is complete, budget-safe and differs from the control somewhere;
+- in the benchmark run, the control's schedules must equal DCR-v1 Admission's stored schedules on every dev and
+  expansion instance.

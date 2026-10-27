@@ -179,6 +179,23 @@ role = "ablation"
 enabled = false
 sources = ["algorithms/dcr_ablations", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
 
+# Scoring ablation (predeclared 2026-10-27, docs/proposed/ABLATIONS_PAPER1.md addendum).
+[dcr-abl-scoring-control]
+label = "Ablation: scoring control (= DCR-v1 Admission)"
+module = "algorithms.dcr_ablations_scoring"
+class = "ScoringControlScheduler"
+role = "ablation"
+enabled = false
+sources = ["algorithms/dcr_ablations_scoring", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+[dcr-abl-bdc-score]
+label = "Ablation: BDC-style quality ranking"
+module = "algorithms.dcr_ablations_scoring"
+class = "BDCScoreScheduler"
+role = "ablation"
+enabled = false
+sources = ["algorithms/dcr_ablations_scoring", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
 # Weight-tuned comparator variants (docs/proposed/EXPERIMENTS_PAPER1.md); 0.5 is the registered comparator.
 [bdc-w01]
 label = "BDC (w=0.1)"
