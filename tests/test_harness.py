@@ -87,10 +87,11 @@ def test_reference_results_reproduce_the_published_counts():
 def test_plan_skips_runs_already_in_the_store(tmp_path, monkeypatch):
     reg = bench.registry()
     inst = data.manifest()["entries"][0]["instance_id"]
-    store = tmp_path / "store.csv"
+    monkeypatch.setattr(bench, "STORE", tmp_path / "store.csv")
+    monkeypatch.setattr(bench, "STORE_DIR", tmp_path / "store")
     bench.write_store([{"algo": "bdc", "source_sha256": reg["bdc"]["source_sha256"], "instance_id": inst,
-                        "status": "ok", "reps": 2}], store)
-    monkeypatch.setattr(bench, "STORE", store)
+                        "status": "ok", "reps": 2}])
+    assert (tmp_path / "store" / "bdc.csv").exists()
     monkeypatch.setattr(bench, "WORK", tmp_path)
     args = type("A", (), dict(set="dev", algos="bdc", suite="all", families="all", tasks="all", qos="all",
                               reps=2, workers=0, shards=4, force=False, github_output=None))
@@ -113,3 +114,20 @@ def test_expansion_reference_covers_every_instance_for_eight_algorithms():
     refs = verify_replay.load_references()
     exp = [k for k in refs if k.startswith("expansion:")]
     assert len(exp) == 8 and all(len(refs[k]) == 1890 for k in exp)
+
+
+def test_store_migrates_from_the_legacy_file_to_per_algorithm_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench, "STORE", tmp_path / "store.csv")
+    monkeypatch.setattr(bench, "STORE_DIR", tmp_path / "store")
+    legacy = [{"algo": a, "source_sha256": "s", "instance_id": f"i{k}", "status": "ok", "reps": 1}
+              for a in ("bdc", "dbcs") for k in range(3)]
+    bench._write_csv(legacy, tmp_path / "store.csv")
+    newer = {"algo": "bdc", "source_sha256": "s", "instance_id": "i0", "status": "error", "reps": 1}
+    bench._write_csv([newer], tmp_path / "store" / "bdc.csv")
+    rows = bench.read_store()
+    assert len(rows) == 6 and [r for r in rows if r["instance_id"] == "i0" and r["algo"] == "bdc"][0]["status"] == "error"
+    bench.write_store(rows)
+    assert not (tmp_path / "store.csv").exists()
+    assert sorted(p.name for p in (tmp_path / "store").glob("*.csv")) == ["bdc.csv", "dbcs.csv"]
+    assert sorted((r["algo"], r["instance_id"], r["status"]) for r in bench.read_store()) == sorted(
+        (r["algo"], r["instance_id"], r["status"]) for r in rows)
