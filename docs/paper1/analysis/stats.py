@@ -1,6 +1,6 @@
 """Statistical evidence for the joint-feasibility paper, from stored results only.
 
-No scheduler is run. Reads results/store.csv and the report case lists.
+No scheduler is run. Reads results/store/ and the report case lists.
 Usage: python3 stats.py <bench_repo_dir> <out_dir>
 """
 import csv
@@ -12,6 +12,8 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import binomtest, wilcoxon
 
+from store_rows import load_store_rows
+
 REPO, OUT = Path(sys.argv[1]), Path(sys.argv[2])
 OUT.mkdir(parents=True, exist_ok=True)
 RNG = np.random.default_rng(20261024)
@@ -20,7 +22,7 @@ EXT = "dcr-v3-rescue"
 COMPARATORS = ["bdc", "bdsd", "dbcs", "bdheft", "bddc", "heft-ifc", "peft-ifc"]
 LABEL = {}
 
-rows = list(csv.DictReader(open(REPO / "results/store.csv")))
+rows = load_store_rows(REPO)
 sets = {s: {x["instance_id"] for x in csv.DictReader(open(REPO / f"results/reports/{s}-all/results.csv"))}
         for s in ("dev", "expansion")}
 
@@ -145,7 +147,7 @@ for s in ("dev", "expansion"):
     res["extension"] = ext
 
     # 4. predeclared mechanism ablation A/B/C (DCR-v1 spec): A = v0-opt capacity-only reserve,
-    #    B = corrected reserve in admission only (v1 Admission), C = corrected in admission + ranking (v1)
+    #    B = corrected reserve in admission only (v1 Admission), C = in admission and ranking (v1)
     md.append("\n## Mechanism ablation predeclared in the DCR-v1 spec\n")
     md.append("A = capacity-only reserve (DCR-v0 optimized), B = child-arrival reserve in admission only "
               "(DCR-v1 Admission), C = in admission and ranking (DCR-v1 full).\n")
