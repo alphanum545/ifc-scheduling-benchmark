@@ -1,6 +1,6 @@
 # Replay against historical results
 
-Each run in `results/store.csv` made with the current source is compared field by field with the stored
+Each run in the store (`results/store/`) made with the current source is compared field by field with the stored
 historical result for the same algorithm version and instance (schedule identity, makespan, cost, energy,
 feasibility). Runtimes are not compared.
 
