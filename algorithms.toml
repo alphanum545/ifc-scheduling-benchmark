@@ -113,6 +113,13 @@ role = "proposed"
 sources = ["ifc_algorithms", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
 reference = "core24:dcr-v3-rescue"
 
+[dcr-v4-quality]
+label = "DCR-v4 (reserve + quality ranking)"
+module = "algorithms.dcr_ifc_v4"
+class = "DCRV4QualityScheduler"
+role = "proposed"
+sources = ["algorithms/dcr_ifc_v4", "algorithms/dcr_ablations_scoring", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
 [dcr-v2-graded]
 label = "DCR-v2 Graded"
 module = "ifc_algorithms.proposed.dcr_v2"
