@@ -291,6 +291,118 @@ study (`workers = 1`, DCR-v4 and BDC in the same run), as was done for v1.
 3. a dedicated runtime study;
 4. updated method section, novelty claim and tables.
 
+## 6e. DCR-v4 follow-ups and the DCR-v4R extension (runs 2026-10-27, all in CI)
+
+These are the follow-ups §6d listed as due. Each one reuses an existing, predeclared protocol unchanged (§8b for
+the grid, robustness and exact check, §5 for runtime). DCR-v4R is frozen in
+`docs/proposed/DCR_V4R_FREEZE_2026-10-27.md`, with its predictions written before its runs.
+
+### A. Tightness grid (`ifc-grid-v1`, protocol §8b.C)
+
+| Method | Joint feasible (whole grid) |
+|---|---:|
+| DCR-v3 Rescue | 97.9% |
+| **DCR-v4** | **86.0%** |
+| DCR-v1 Admission | 82.4% |
+| BDCWS | 69.9% |
+| BDC | 68.9% |
+
+Across the 25 cells (exact McNemar, uncorrected, p < 0.05):
+- DCR-v4 is **never significantly worse** than DCR-v1 or BDC. It is significantly better than DCR-v1 in 8 cells
+  and than BDC in 15.
+- DCR-v4 is **significantly worse than BDCWS in 3 cells**: (α, β) = (1/20, 1/10), (1/4, 1/10) and (1/4, 3/10).
+  This is the same moderate-budget weakness as in §6d. Report it.
+
+DCR-v4R (run `grid-all-v4r`). The prediction, written before the run, is the union of the stored DCR-v4 and DCR-v3
+outcomes: 3,914/3,975 (98.5%); DCR-v3 alone has 3,893. Result: **3,914/3,975 (98.5%), exactly as
+predicted**, with 0 deviations from the union. It met the budget on 3,975/3,975. In the cell-by-cell tests DCR-v4R is
+significantly better than BDCWS in 15 cells, better than BDC in 16 and better than DCR-v3 in 1. It is significantly
+worse in none. No cell has more DCR-v4R losses than wins against any of the three. In particular, DCR-v4's three
+losing cells against BDCWS are resolved: over the whole grid it is 1,153 vs 18.
+
+### B. Runtime (clean, same run)
+
+For each study, all methods ran in the same CI run: `workers = 1`, 2 repetitions, every pair on the same machine.
+
+DCR-v4 study (`runtime-dev-v4`, 160 dev cases; the same CPU model for 160/160 DCR-v4/BDC pairs):
+
+| Method | Median ratio to BDC | p95 | Max |
+|---|---:|---:|---:|
+| **DCR-v4** | **0.588** | **1.211** | 1.41 |
+| DCR-v1 Admission | 0.568 | 1.209 | 1.37 |
+| BDCWS | 0.880 | | |
+| DCR-v3 Rescue | 0.686 | 2.950 | 8.55 |
+
+The quality ranking costs DCR-v4 nothing measurable over DCR-v1's slack-loss ranking. Replay: 0 mismatches over 23
+reference sets.
+
+DCR-v4R study (`runtime-dev-v4r`, 160 dev cases; the same CPU model for 160/160 pairs; deterministic on 160/160; BDC median 750 ms):
+
+| Method | Median ratio to BDC | p95 | Max |
+|---|---:|---:|---:|
+| DCR-v4R | 0.692 | 2.079 | 7.69 |
+| DCR-v4 | 0.620 | 1.192 | 1.39 |
+| DCR-v3 Rescue | 0.693 | 2.926 | 8.24 |
+
+DCR-v4R costs one DCR-v4 run on the 148 cases where DCR-v4's plan succeeds (median 0.638×, max 1.39×). Its tail comes
+only from the 12 fallback cases, where the v3 portfolio runs (median 2.76×, max 7.69×). DCR-v4R's median equals
+DCR-v3's, and its p95 is lower. DCR-v4's ratio in this study (0.620×) agrees with the earlier `runtime-dev-v4`
+study (0.588×). Replay: 0 mismatches.
+
+### C. Robustness (dev, protocol §8b.D, 30 seeded perturbations per instance; 74,400 rows, 0 errors)
+
+Joint feasible (%) under runtime and bandwidth noise:
+
+| Method | Nominal | ±10% | ±20% | ±30% |
+|---|---:|---:|---:|---:|
+| DCR-v4R | 99.4 | 80.2 | 73.7 | 69.0 |
+| DCR-v3 Rescue | 98.1 | 78.0 | 75.1 | 67.2 |
+| **DCR-v4** | **92.5** | **75.1** | **69.2** | **65.6** |
+| DCR-v1 Admission | 87.5 | 70.6 | 68.6 | 61.8 |
+| BDC | 75.0 | 68.9 | 64.3 | 62.4 |
+| BDCWS | 74.4 | 61.4 | 59.4 | 57.8 |
+
+DCR-v4 stays ahead of DCR-v1, BDC and BDCWS at every noise level. Its margin over BDC shrinks from 17.5 pp at
+nominal to 3.2 pp at ±30%, so threat 5 (§9) still applies.
+
+### D. Exact CP-SAT check (277 sixty-task instances proved feasible, protocol §8b.E)
+
+| Method | Solved of 277 proved feasible |
+|---|---:|
+| DCR-v4R | 275 |
+| DCR-v3 Rescue | 274 |
+| **DCR-v4** | **258** |
+| DCR-v1 Admission | 254 |
+| BDCWS | 211 |
+| BDC | 185 |
+| BDSD | 158 |
+
+### E. DCR-v4R (DCR-v4, then the frozen v3 portfolio only when DCR-v4's plan fails)
+
+**The prediction was met exactly on every set.** DCR-v4R's outcome equals the union of the stored DCR-v4 and DCR-v3
+outcomes, with 0 deviations on 4,291 instances. It met the budget on 4,291/4,291 and produced 0 invalid runs.
+
+| Set | DCR-v4R | Predicted | Only v4R vs DCR-v3 | Only v4R vs DCR-v4 | Fallback used |
+|---|---:|---:|---:|---:|---:|
+| dev (160) | 159 | 159 | 2 / 0 | 11 / 0 | 12 |
+| expansion (1,890) | 1,857 (98.3%) | 1,857 | 13 / 0 (p = 2.4e-4) | 125 / 0 | 158 |
+| unseen (2,241) | 2,216 (98.9%) | 2,216 | 8 / 0 (p = 7.8e-3) | 210 / 0 | 235 |
+
+"Fallback used" counts the instances where DCR-v4's own plan failed, so the v3 portfolio ran. That is 10.5% of
+unseen instances; on all the others DCR-v4R costs exactly one DCR-v4 run.
+
+Unseen, DCR-v4R against BDCWS: 578 vs 0 (p = 2.0e-174). By QoS (DCR-v4R / DCR-v3 / DCR-v4 / BDCWS):
+- tight 722 / 714 / 616 / 194;
+- moderate 747 / 747 / 643 / 697;
+- relaxed all 747.
+
+**The extension removes both weaknesses that DCR-v4 shows against BDCWS.** At moderate QoS DCR-v4R solves 747 vs
+BDCWS's 697, and on blast 378 vs 375.
+
+**Wording for the paper.** DCR-v4R replaces "DCR-v3 on DCR-v1" as the extension. Its unseen result is a
+reproduction of a composition whose two parts had both already seen that set. So it is reported as such, not as
+a new out-of-sample test. Its out-of-sample standing rests on DCR-v4's single unseen run (§6d) and on DCR-v3's.
+
 ## 7. Novelty: bounded check and the claim to make
 
 Search done: deadline-and-budget workflow heuristics, cheapest-remaining-cost reserves, dual-price/Lagrangian bounds in DAG scheduling, minimax slack ranking, IFC/fog 2024–2026. The comparator audits in `docs/paper_audits/` were cross-read. The check was time-boxed, not exhaustive.
@@ -474,4 +586,7 @@ The figures are joint-feasibility percentages of all dev instances, averaged ove
 | **Scoring ablation**: DCR reserve with BDC-style normalization instead of slack-relative losses (§7b) | **Done 2026-10-27** (§6c). The variant is significantly better (+5.4 pp on expansion), so the scoring is not a contribution; the headline decision is open |
 | **BDCWS comparator** (Cluster Computing 2023), from the 2026-10-26 literature audit | **Done 2026-10-26/27**, reproduced in CI. Unseen 73.1% vs DCR-v1 85.0%; BDCWS is better at moderate QoS and on blast. Reports `*-all-bdcws` |
 | **DCR-v4 freeze and unseen confirmation** (reserve admission + quality ranking) | **Done 2026-10-27** (§6d). Unseen 89.5% vs DCR-v1 85.0% (106 vs 5, p = 1e-25), so **adopted as headline**. Follow-ups due: grid, robustness, exact check and runtime study for v4; the v3 decision |
-| Writing | Next (after the follow-ups or in parallel) |
+| **DCR-v4 follow-ups** (grid, robustness, exact check, clean runtime study) | **Done 2026-10-27** (§6e A–D). DCR-v4 is never significantly worse than DCR-v1 or BDC in any grid cell, and it is worse than BDCWS in 3 cells. Runtime 0.588× BDC |
+| **DCR-v4R extension** (the v3 decision: DCR-v4, then the frozen v3 portfolio on failure) | **Done 2026-10-27** (§6e E). Every prediction was met exactly: dev 159, expansion 1,857, unseen 2,216 and grid 3,914, with 0 deviations. It replaces "DCR-v3 on DCR-v1" as the extension |
+| Results store split into one CSV per algorithm (GitHub 100 MB limit) | **Done 2026-10-27** (PR #8). Migration verified: all 159,125 earlier rows unchanged |
+| Writing | Next: tables (make_tables with DCR-v4, DCR-v4R, BDCWS and the clean runtime), then the method, results and related work |
