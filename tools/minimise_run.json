@@ -1,0 +1,9 @@
+{
+  "mode": "smoke",
+  "study_shards": 2,
+  "limit": 2,
+  "exact_shards": 2,
+  "exact_limit": 1,
+  "time_limit": 20,
+  "publish": false
+}

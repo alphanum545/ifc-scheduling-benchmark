@@ -1,0 +1,114 @@
+== A. Full study: 160 instances, 480 runs ==
+
+-- A1. How one DCR-v4R run uses the limits (fraction of D and B), quantiles 0/10/25/50/75/90/100%
+ makespan / D  [0.038, 0.084, 0.155, 0.549, 0.874, 0.974, 1.122]
+ cost / B      [0.184, 0.698, 0.896, 0.967, 0.993, 1.0, 1.0]
+ DCR-Min-cost makespan / D    [0.567, 0.964, 0.988, 0.997, 0.999, 1.0, 1.0]
+ DCR-Min-makespan cost / B    [0.697, 0.965, 0.987, 0.997, 1.0, 1.0, 1.0]
+
+-- A2. Breakdown: geo-mean DCR-Min / one DCR-v4R run (makespan; cost), and DCR-Min / reference
+ by family: n | mk/v4R | mk/t_fast | cost/v4R | cost/floor | median runtime mk, cost (s)
+  cybershake  32 | 0.716 | 1.571 | 0.229 | 0.846 | 24.8, 23.5
+      genome  32 | 0.682 | 1.425 | 0.243 | 0.778 | 39.3, 25.0
+        ligo  32 | 0.757 | 1.503 | 0.260 | 0.767 | 36.2, 25.4
+     montage  32 | 0.590 | 1.434 | 0.280 | 0.863 | 70.7, 43.4
+       sipht  32 | 0.673 | 1.487 | 0.298 | 1.014 | 17.8, 15.6
+ by tasks: n | mk/v4R | mk/t_fast | cost/v4R | cost/floor | median runtime mk, cost (s)
+          60  23 | 0.676 | 1.383 | 0.261 | 0.885 | 3.0, 2.3
+         100  24 | 0.636 | 1.395 | 0.289 | 0.912 | 7.1, 5.3
+         200  23 | 0.766 | 1.499 | 0.303 | 0.885 | 15.0, 11.1
+         400  24 | 0.664 | 1.510 | 0.250 | 0.848 | 33.2, 25.4
+         600  22 | 0.672 | 1.629 | 0.225 | 0.826 | 72.8, 57.2
+         800  22 | 0.692 | 1.466 | 0.248 | 0.811 | 106.0, 80.4
+        1000  22 | 0.673 | 1.523 | 0.255 | 0.779 | 208.2, 111.8
+ by qos: n | mk/v4R | mk/t_fast | cost/v4R | cost/floor | median runtime mk, cost (s)
+    moderate  52 | 0.598 | 2.363 | 0.302 | 0.818 | 23.7, 22.1
+     relaxed  54 | 0.582 | 1.317 | 0.062 | 0.798 | 28.9, 23.9
+       tight  54 | 0.905 | 1.066 | 0.955 | 0.938 | 37.6, 25.1
+
+-- A3. Instances where DCR-Min is not strictly better than one DCR-v4R run
+  cost     cybershake-0600-r01-540d4f8229cc-s02-compute_constrained-seed101-tight: DCR-Min 2657117069925 vs v4R 2342466579500
+  makespan genome-1000-r01-6c0fb0ea2f03-s02-balanced-seed101-tight: DCR-Min 126622787945 vs v4R 126622787945
+  makespan montage-0200-r03-a443b3db5e56-s03-network_constrained-seed303-tight: DCR-Min 61653470 vs v4R 61653470
+  cost     montage-0200-r03-a443b3db5e56-s03-network_constrained-seed303-tight: DCR-Min 378608003500 vs v4R 378608003500
+  makespan sipht-0060-r03-cd41834c3787-s02-network_constrained-seed303-tight: DCR-Min 1028463874 vs v4R 1028463874
+
+-- A4. Runtime scaling (least squares on log runtime vs log tasks)
+  dcr-v4-rescue: runtime ~ n^1.43
+  dcr-min-makespan: runtime ~ n^1.40
+  dcr-min-cost: runtime ~ n^1.38
+
+== B. Probe traces and 40-point oracle sweeps: 70 instances (60-200 tasks) ==
+
+-- B1. Convergence: geo-mean of best-after-k-probes / best-of-sweep, and / reference
+  k= 1  makespan: /sweep 2.469 /t_fast 3.551   cost: meets D  0/70 /sweep nan /floor nan
+  k= 2  makespan: /sweep 1.434 /t_fast 2.063   cost: meets D 70/70 /sweep 4.329 /floor 4.161
+  k= 3  makespan: /sweep 1.174 /t_fast 1.688   cost: meets D 70/70 /sweep 2.423 /floor 2.329
+  k= 4  makespan: /sweep 1.077 /t_fast 1.549   cost: meets D 70/70 /sweep 1.527 /floor 1.468
+  k= 6  makespan: /sweep 1.023 /t_fast 1.471   cost: meets D 70/70 /sweep 1.057 /floor 1.016
+  k= 8  makespan: /sweep 1.005 /t_fast 1.446   cost: meets D 70/70 /sweep 0.960 /floor 0.923
+  k=10  makespan: /sweep 0.997 /t_fast 1.434   cost: meets D 70/70 /sweep 0.936 /floor 0.900
+  k=12  makespan: /sweep 0.990 /t_fast 1.424   cost: meets D 70/70 /sweep 0.930 /floor 0.894
+  k=16  makespan: /sweep 0.988 /t_fast 1.421   cost: meets D 70/70 /sweep 0.929 /floor 0.893
+  k=24  makespan: /sweep 0.987 /t_fast 1.419   cost: meets D 70/70 /sweep 0.929 /floor 0.893
+  12-probe search vs 40-point sweep: makespan better/equal/worse 43/15/12; cost 57/9/4
+  probes actually used with cap 24 (median): makespan 14.0, cost 12.0
+
+-- B2. Which probe (0-based, within 12) produced the returned plan
+  makespan: {0: 3, 1: 1, 2: 4, 3: 5, 4: 2, 6: 5, 7: 4, 8: 9, 9: 13, 10: 12, 11: 12}
+  cost: {4: 8, 5: 11, 6: 10, 7: 2, 8: 6, 9: 13, 10: 7, 11: 13}
+  cost start probe at LB_C(D) met D on 0/70; LB_C(D) = 0 on 49/70
+
+-- B3. Oracle response to the probed knob (sweep points)
+  makespan sweep: achieved makespan / probed deadline [0.068, 0.349, 0.607, 0.945, 2.898, 7.872, 85.767]
+  makespan sweep: cost / B                             [0.394, 0.86, 0.937, 0.99, 1.0, 1.0, 1.0]
+  cost sweep:     cost / probed budget (budget < cost_max/2) [0.0, 0.758, 0.948, 0.996, 1.0, 1.0, 1.0]
+  instances where a looser probed deadline gave a shorter makespan: 68/70; where a probed deadline was met and the next looser one missed: 5/70
+  instances where D was met at a budget and missed at the next larger one: 0/70
+
+-- B4. Ablations
+  makespan without the 2x slack start probe / default: geo-mean 0.9970, worse on 12, better on 19
+  cost with the instance budget B as an extra probe / default: geo-mean 1.0000, improves on 0
+
+-- B5. The one cost loss vs one DCR-v4R run: cybershake-0600-r01-540d4f8229cc-s02-compute_constrained-seed101-tight (D=820017770, B=2560244459902)
+   probe budget 0.0000e+00: makespan/D 33.831, cost 0.0000e+00
+   probe budget 4.6237e+12: makespan/D 0.668, cost 2.9742e+12
+   probe budget 1.4871e+12: makespan/D 13.783, cost 1.4871e+12
+   probe budget 2.2306e+12: makespan/D 5.796, cost 2.2306e+12
+   probe budget 2.6024e+12: makespan/D 1.897, cost 2.6024e+12
+   probe budget 2.7883e+12: makespan/D 0.802, cost 2.7784e+12
+   probe budget 2.6904e+12: makespan/D 0.861, cost 2.6900e+12
+   probe budget 2.6462e+12: makespan/D 1.622, cost 2.6462e+12
+   probe budget 2.6681e+12: makespan/D 0.875, cost 2.6681e+12
+   probe budget 2.6571e+12: makespan/D 0.884, cost 2.6571e+12
+   at the instance budget B: makespan/D 1.0000, cost 2.3425e+12
+   sweep: 3/41 budgets meet D, cheapest 2.8829e+12
+
+== C. Classic greedy baselines (Sakellariou et al., 2007) ==
+
+-- C1. Min makespan s.t. B, LOSS1 from HEFT-IFC (all 160 instances, all within budget)
+  makespan/t_fast: DCR-Min 1.483, LOSS1 4.557; DCR-Min better/tie/worse 156/2/2
+  DCR-Min / LOSS1 quantiles [0.09, 0.151, 0.225, 0.344, 0.479, 0.621, 1.001]; LOSS1 runtime median 0.44s
+
+-- C2. Min makespan s.t. B, GAIN from the cheapest assignment (70 instances <= 200 tasks)
+  makespan/t_fast: DCR-Min 1.424, GAIN 5.398; DCR-Min better on 70
+
+-- C3. Min cost s.t. D, deadline-LOSS from HEFT-IFC with the evaluator in the loop (94 instances <= 400 tasks; HEFT start meets D on all)
+    all n=94: cost/floor DCR-Min 0.8822, LOSS 0.9566; DCR-Min better/worse 54/40
+  <=200 n=70: cost/floor DCR-Min 0.8941, LOSS 0.9920; DCR-Min better/worse 43/27
+    400 n=24: cost/floor DCR-Min 0.8483, LOSS 0.8605; DCR-Min better/worse 11/13
+     tight n=32: DCR-Min 0.9317, LOSS 0.9238, better/worse 14/18
+  moderate n=31: DCR-Min 0.8718, LOSS 0.9378, better/worse 17/14
+   relaxed n=31: DCR-Min 0.8438, LOSS 1.0118, better/worse 23/8
+  DCR-Min / LOSS quantiles [0.298, 0.658, 0.934, 0.992, 1.019, 1.057, 1.411]; LOSS runtime median 2.46s (<=200: 1.26s, 400: 24.8s)
+  DCR-Min-cost runtime median on the same instances: <=200 5.29s, 400 25.4s
+  overall makespan DCR-Min / one DCR-v4R run (geo-mean, 160): 0.682
+
+-- D. DCR-Min-cost + LOSS polish from its plan (94 instances <= 400 tasks; every polished plan meets D)
+    all n=94: cost/floor DCR-Min 0.8822, +polish 0.8449, LOSS 0.9566; polish improves 87; polished vs LOSS better/worse 69/24
+  <=200 n=70: cost/floor DCR-Min 0.8941, +polish 0.8564, LOSS 0.9920; polish improves 64; polished vs LOSS better/worse 54/15
+    400 n=24: cost/floor DCR-Min 0.8483, +polish 0.8122, LOSS 0.8605; polish improves 23; polished vs LOSS better/worse 15/9
+     tight n=32: DCR-Min 0.9317, +polish 0.9134, LOSS 0.9238
+  moderate n=31: DCR-Min 0.8718, +polish 0.7945, LOSS 0.9378
+   relaxed n=31: DCR-Min 0.8438, +polish 0.8289, LOSS 1.0118
+  polished/DCR-Min quantiles [0.599, 0.924, 0.957, 0.985, 0.998, 1.0, 1.0]; polish time median 1.73s vs DCR-Min 7.78s

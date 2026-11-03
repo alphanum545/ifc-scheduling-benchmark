@@ -306,3 +306,22 @@ class = "BDHEFTScheduler_09"
 role = "tuning"
 enabled = false
 sources = ["algorithms/tuning", "algorithms/bdheft", "algorithms/common", "algorithms/__init__.py"]
+
+# DCR-Min: DCR (v4R, unchanged) as an oracle inside a bounded search for the two single-objective
+# variants. These do not target joint feasibility, so they are not run by "all"; use
+# tools/minimise.py (see docs/proposed/DCR_MIN.md).
+[dcr-min-makespan]
+label = "DCR-Min (makespan s.t. budget)"
+module = "algorithms.dcr_min"
+class = "DCRMinMakespanScheduler"
+role = "proposed-minimisation"
+enabled = false
+sources = ["algorithms/dcr_min", "algorithms/dcr_ifc_v4_rescue", "ifc_algorithms", "algorithms/dcr_ifc_v4", "algorithms/dcr_ablations_scoring", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+[dcr-min-cost]
+label = "DCR-Min (cost s.t. deadline)"
+module = "algorithms.dcr_min"
+class = "DCRMinCostScheduler"
+role = "proposed-minimisation"
+enabled = false
+sources = ["algorithms/dcr_min", "algorithms/dcr_ifc_v4_rescue", "ifc_algorithms", "algorithms/dcr_ifc_v4", "algorithms/dcr_ablations_scoring", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
