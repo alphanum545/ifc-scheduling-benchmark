@@ -9,6 +9,8 @@ single-objective variants:
 | `dcr-min-makespan` | minimise makespan | compute cost <= B | D |
 | `dcr-min-cost` | minimise compute cost | makespan <= D | B |
 
+Analysis (guarantees, convergence, failure modes, greedy baselines): `docs/proposed/DCR_MIN_ANALYSIS.md`.
+
 Code: `algorithms/dcr_min/`. Study driver: `tools/minimise.py`. Results:
 `results/minimise/summary.md` (the per-run CSVs are not committed; regenerate them with
 `tools/minimise.py run`, about 3.5 h on 2 cores, then `tools/minimise.py report`). Tests: `tests/test_dcr_min.py`.
