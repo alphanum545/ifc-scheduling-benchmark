@@ -1,3 +1,0 @@
-set,instance_id,family,qos,objective,status,verified,v2_value,best_value,bound,lb_simple,wall_s,v2_runtime_s,deadline_us,budget_ncu,error
-dev,candidate-v1-draft-wf-cybershake-0060-r01-91ded9b3c5de-s02-compute_constrained-seed101-moderate,cybershake,moderate,makespan,FEASIBLE,True,201302089,185673224,61645335,61645335,20.3,1.97,877345824,224480503175,
-dev,candidate-v1-draft-wf-cybershake-0060-r01-91ded9b3c5de-s02-compute_constrained-seed101-moderate,cybershake,moderate,cost,FEASIBLE,True,44666500325,38228500275,33268333375,0,20.2,1.81,877345824,224480503175,
