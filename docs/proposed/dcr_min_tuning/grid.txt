@@ -1,0 +1,27 @@
+35 instances complete; evaluator/internal agree on all rows: True
+
+== mk: ms/t_fast (only rows satisfying the hard constraint), vs DCR-v4R single run ==
+config                    ok  geomean   median   tight   moder   relax  <v4R  =v4R  >v4R probes   rt_s
+base:v4r:None             35   1.9282   2.2376   1.140   2.914   2.517     0    35     0      0   0.10
+mk:v1adm:bisect           35   1.6328   1.4875   1.168   2.638   1.450    25     1     9      9   0.65
+mk:v1adm:descent          35   1.6227   1.4875   1.165   2.635   1.424    25     1     9     10   0.75
+mk:v1adm:hybrid           35   1.6337   1.4875   1.169   2.640   1.450    25     1     9      8   0.57
+mk:v4:bisect              35   1.5327   1.3218   1.114   2.474   1.329    29     1     5      9   0.64
+mk:v4:descent             35   1.5477   1.3218   1.115   2.558   1.319    27     3     5     12   0.92
+mk:v4:hybrid              35   1.5361   1.3336   1.117   2.478   1.333    29     1     5      8   0.53
+mk:v4r:bisect             35   1.4075   1.2061   1.053   2.122   1.280    34     0     1      9   5.14
+mk:v4r:descent            35   1.4016   1.1716   1.055   2.107   1.266    33     2     0     12   7.79
+mk:v4r:hybrid             35   1.4105   1.2061   1.054   2.129   1.282    34     0     1      8   4.81
+
+== cost: cost/cost_floor (only rows satisfying the hard constraint), vs DCR-v4R single run ==
+config                    ok  geomean   median   tight   moder   relax  <v4R  =v4R  >v4R probes   rt_s
+base:v4r:None             35   2.6662   2.6517   0.986   2.800  11.736     0    35     0      0   0.10
+cost:v1adm:bisect         35   1.1525   1.0158   1.003   1.614   0.913    24     0    11     11   0.80
+cost:v1adm:descent        35   1.1662   1.0405   1.001   1.536   1.024    25     0    10     12   0.92
+cost:v1adm:hybrid         35   1.1625   1.0158   1.005   1.642   0.920    24     0    11      8   0.71
+cost:v4:bisect            35   1.0933   0.9942   0.976   1.388   0.949    32     0     3     10   0.83
+cost:v4:descent           35   1.1182   1.0036   0.975   1.383   1.041    31     1     3     12   0.89
+cost:v4:hybrid            35   1.1010   0.9942   0.978   1.406   0.956    32     0     3      8   0.64
+cost:v4r:bisect           35   0.9071   0.9205   0.951   0.899   0.854    34     1     0     10   5.26
+cost:v4r:descent          35   0.9321   0.9374   0.951   0.911   0.931    34     1     0     12   5.56
+cost:v4r:hybrid           35   0.9214   0.9440   0.954   0.922   0.872    34     1     0      8   3.70
