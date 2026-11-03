@@ -1,176 +1,92 @@
 #!/usr/bin/env python3
-"""Exact joint-feasibility check of small instances with OR-tools CP-SAT (paper 1).
+"""RUN-BRANCH DISPATCHER for the DCR-Min v2 study. Lives on the `dcr-min-run` branch only; never merge it.
 
-Protocol (docs/proposed/EXPERIMENTS_PAPER1.md, fixed before running): for every 60-task instance of
-the dev and expansion sets, decide whether ANY schedule meets both the deadline and the budget.
+The "Exact check" workflow (.github/workflows/exact.yml) runs `tools/exact.py run ... --shard K --shards S` on
+20 parallel machines with OR-tools installed and the dev + expansion data fetched. On this branch that entry
+point is replaced so the same 20 machines run the DCR-Min v2 minimisation study instead:
 
-Model (identical semantics to generator.schedule):
-  x[t,r]  task t on resource r (exactly one);  s[t] start, e[t] = s[t] + sum_r p[t,r] x[t,r];
-  serial resources: NoOverlap over optional fixed-size intervals (s[t], p[t,r], x[t,r]);
-  precedence i->j: s[j] >= e[i] + comm(i,j, tier(i), tier(j)) unless i and j share a resource,
-  then s[j] >= e[i]; comm is generator.network.resource_route_metrics for the edge's data bits;
-  e[t] <= D for every t;  sum c[t,r] x[t,r] <= B.
-Outcome per instance: FEASIBLE (a schedule found, then independently rebuilt with the pinned
-evaluator from its start-time order and mapping and required to be jointly feasible),
-INFEASIBLE (proved), or UNKNOWN (time limit).
+  1. tools/minimise_v2.py run   (study shard K of S, all cores)
+  2. tools/exact_min.py run     (CP-SAT optimality-gap shard K of S)
+  3. push both shard CSVs to the `dcr-min-results` branch (rebase-and-retry), and once all S shards are
+     there, merge them and write results/minimise_v2/summary.md on that branch
+  4. exit with status 3 ON PURPOSE: a failed run job makes GitHub skip exact.yml's merge job, which would
+     otherwise reset to main and commit there. Nothing is ever pushed to main.
 
-  python3 tools/exact.py run --data-dev data/dev --data-expansion data/expansion --shard 0 --shards 20 --out .work/x-0.csv
-  python3 tools/exact.py merge --inputs ".work/x-*.csv" --out results/exact/exact-60.csv
+Sizes come from tools/minimise_run.json. The real tools/exact.py is on main and on the dcr-min branch.
 """
 from __future__ import annotations
 
 import argparse
-import csv
-import glob
 import json
+import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "tools"))
-
-TIME_LIMIT_S = 120
-WORKERS = 4
-FIELDS = ["set", "instance_id", "family", "qos", "scale", "scenario", "status", "verified", "wall_s",
-          "makespan_us", "compute_cost_ncu", "deadline_us", "budget_ncu", "error"]
+RESULTS_BRANCH = "dcr-min-results"
+OUT = Path("/tmp/minimise-out")
 
 
-def solve(base: dict, D: int, B: int):
-    from ortools.sat.python import cp_model
-    from generator.network import resource_route_metrics
-
-    tasks = sorted(base["execution_time_us"])
-    res = sorted(r["resource_id"] for r in base["resources"])
-    tier = {r["resource_id"]: r["tier"] for r in base["resources"]}
-    tiers = sorted(set(tier.values()))
-    p, c = base["execution_time_us"], base["compute_cost_ncu"]
-    edges = [(d["parent"], d["child"], int(d["data_bits"])) for d in base["dependencies"]]
-    rep = {k: [r for r in res if tier[r] == k] for k in tiers}
-
-    m = cp_model.CpModel()
-    x = {(t, r): m.NewBoolVar(f"x_{t}_{r}") for t in tasks for r in res}
-    s = {t: m.NewIntVar(0, D, f"s_{t}") for t in tasks}
-    e = {t: m.NewIntVar(0, D, f"e_{t}") for t in tasks}
-    for t in tasks:
-        m.AddExactlyOne(x[t, r] for r in res)
-        m.Add(e[t] == s[t] + sum(int(p[t][r]) * x[t, r] for r in res))
-    for r in res:
-        m.AddNoOverlap([m.NewOptionalFixedSizeIntervalVar(s[t], int(p[t][r]), x[t, r], f"iv_{t}_{r}") for t in tasks])
-    y = {(t, k): m.NewBoolVar(f"y_{t}_{k}") for t in tasks for k in tiers}
-    for t in tasks:
-        for k in tiers:
-            m.Add(y[t, k] == sum(x[t, r] for r in rep[k]))
-    for i, j, bits in edges:
-        same = m.NewBoolVar(f"same_{i}_{j}")
-        both = []
-        for r in res:
-            w = m.NewBoolVar(f"w_{i}_{j}_{r}")
-            m.AddImplication(w, x[i, r])
-            m.AddImplication(w, x[j, r])
-            m.AddBoolOr([x[i, r].Not(), x[j, r].Not(), w])
-            both.append(w)
-        m.Add(same == sum(both))
-        m.Add(s[j] >= e[i]).OnlyEnforceIf(same)
-        for ki in tiers:
-            for kj in tiers:
-                a = rep[ki][0]
-                b = next((q for q in rep[kj] if q != a), None)
-                if b is None:  # only one resource in this tier: a different-resource pair cannot exist
-                    continue
-                comm = int(resource_route_metrics(base["network"], tier, source_resource_id=a,
-                                                  target_resource_id=b, data_bits=bits)["communication_time_us"])
-                m.Add(s[j] >= e[i] + comm).OnlyEnforceIf([y[i, ki], y[j, kj], same.Not()])
-    m.Add(sum(int(c[t][r]) * x[t, r] for t in tasks for r in res) <= B)
-
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = TIME_LIMIT_S
-    solver.parameters.num_search_workers = WORKERS
-    solver.parameters.random_seed = 0
-    st = solver.Solve(m)
-    if st in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        mapping = {t: next(r for r in res if solver.Value(x[t, r])) for t in tasks}
-        order = sorted(tasks, key=lambda t: (solver.Value(s[t]), t))
-        return "FEASIBLE", order, mapping
-    return ("INFEASIBLE" if st == cp_model.INFEASIBLE else "UNKNOWN"), None, None
+def sh(*cmd: str, check: bool = True) -> subprocess.CompletedProcess:
+    print("+", " ".join(cmd), flush=True)
+    return subprocess.run(cmd, cwd=ROOT, check=check, text=True)
 
 
-def instances(data: dict[str, Path]):
-    import bench
-    out = []
-    for set_name, root in data.items():
-        man = bench.manifest(set_name)
-        bases = {b["base_instance_id"]: b for b in man["base_entries"]}
-        for e in man["entries"]:
-            if int(e["target_task_count"]) == 60:
-                out.append((set_name, e, root / bases[e["base_instance_id"]]["path"], root / e["path"]))
-    return sorted(out, key=lambda z: z[1]["instance_id"])
-
-
-def cmd_run(a) -> int:
-    from generator.schedule import build_schedule
-    work = instances({"dev": Path(a.data_dev), "expansion": Path(a.data_expansion)})[a.shard::a.shards]
-    out = Path(a.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with open(out, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=FIELDS)
-        w.writeheader()
-        for n, (set_name, e, bp, qp) in enumerate(work, 1):
-            base, qos = json.loads(bp.read_text()), json.loads(qp.read_text())
-            D, B = int(qos["deadline"]["deadline_us"]), int(qos["budget"]["budget_ncu"])
-            row = {"set": set_name, "instance_id": e["instance_id"], "family": e["family"], "qos": e["qos_profile"],
-                   "scale": e["resource_scale"], "scenario": e["scenario_profile"], "deadline_us": D,
-                   "budget_ncu": B, "error": ""}
-            t0 = time.time()
-            try:
-                status, order, mapping = solve(base, D, B)
-                row["status"] = status
-                if status == "FEASIBLE":
-                    ev = build_schedule(base, task_order=order, resource_assignments=mapping, deadline_us=D, budget_ncu=B)
-                    row.update(verified=bool(ev.joint_feasible), makespan_us=ev.schedule["makespan_us"],
-                               compute_cost_ncu=ev.schedule["compute_cost_ncu"])
-            except Exception as exc:
-                row.update(status="ERROR", error=f"{type(exc).__name__}: {exc}"[:200])
-            row["wall_s"] = round(time.time() - t0, 1)
-            w.writerow(row)
-            fh.flush()
-            print(f"  {n}/{len(work)} {e['instance_id'][-60:]}: {row['status']} {row.get('verified', '')} {row['wall_s']}s",
-                  flush=True)
-    return 0
-
-
-def cmd_merge(a) -> int:
-    rows = []
-    for f in sorted(glob.glob(a.inputs)):
-        with open(f, newline="") as fh:
-            rows += list(csv.DictReader(fh))
-    rows.sort(key=lambda r: (r["set"], r["instance_id"]))
-    out = Path(a.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with open(out, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=FIELDS)
-        w.writeheader()
-        w.writerows(rows)
-    from collections import Counter
-    print(f"merged {len(rows)} rows -> {out}: {dict(Counter(r['status'] for r in rows))}")
-    return 0
+def publish(shard: int, shards: int, files: list[Path], label: str) -> None:
+    sh("git", "config", "user.name", "github-actions[bot]")
+    sh("git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com")
+    for attempt in range(1, 11):
+        sh("git", "fetch", "-q", "origin", RESULTS_BRANCH)
+        sh("git", "checkout", "-q", "-f", "-B", "results", "FETCH_HEAD")
+        dest = ROOT / "results" / "minimise_v2" / "shards"
+        dest.mkdir(parents=True, exist_ok=True)
+        for f in files:
+            if f.exists():
+                shutil.copy(f, dest / f.name)
+        n_s, n_x = len(list(dest.glob("s-*.csv"))), len(list(dest.glob("x-*.csv")))
+        if n_s == shards and n_x == shards:  # last shard in: merge and report on the results branch
+            r = ROOT / "results" / "minimise_v2"
+            sh(sys.executable, "tools/minimise_v2.py", "merge", "--inputs", str(dest / "s-*.csv"), "--out", str(r / "runs.csv"))
+            sh(sys.executable, "tools/exact_min.py", "merge", "--inputs", str(dest / "x-*.csv"), "--out", str(r / "exact.csv"))
+            sh(sys.executable, "tools/minimise_v2.py", "report", "--runs", str(r / "runs.csv"), "--exact", str(r / "exact.csv"),
+               "--out", str(r / "summary.md"))
+        sh("git", "add", "results/minimise_v2")
+        if sh("git", "commit", "-q", "-m", f"DCR-Min v2 study: shard {shard} {label} ({n_s}/{shards} study, {n_x}/{shards} exact)",
+              check=False).returncode != 0:
+            return
+        if sh("git", "push", "-q", "origin", f"results:{RESULTS_BRANCH}", check=False).returncode == 0:
+            return
+        time.sleep(3 * attempt + shard % 7)
+    raise SystemExit("could not push results")
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    sub = p.add_subparsers(dest="cmd", required=True)
-    r = sub.add_parser("run")
-    r.add_argument("--data-dev", required=True)
-    r.add_argument("--data-expansion", required=True)
-    r.add_argument("--shard", type=int, default=0)
-    r.add_argument("--shards", type=int, default=1)
-    r.add_argument("--out", required=True)
-    m = sub.add_parser("merge")
-    m.add_argument("--inputs", required=True)
-    m.add_argument("--out", required=True)
+    p = argparse.ArgumentParser()
+    p.add_argument("cmd")
+    p.add_argument("--data-dev")
+    p.add_argument("--data-expansion")
+    p.add_argument("--shard", type=int, default=0)
+    p.add_argument("--shards", type=int, default=1)
+    p.add_argument("--out")
     a = p.parse_args()
-    return {"run": cmd_run, "merge": cmd_merge}[a.cmd](a)
+    if a.cmd != "run":
+        raise SystemExit("run-branch dispatcher: only `run` is supported")
+    c = json.loads((ROOT / "tools" / "minimise_run.json").read_text())
+    OUT.mkdir(parents=True, exist_ok=True)
+    s_out, x_out = OUT / f"s-{a.shard}.csv", OUT / f"x-{a.shard}.csv"
+    study = sh(sys.executable, "tools/minimise_v2.py", "run", "--sets", "dev,expansion", "--data", "data",
+               "--shard", str(a.shard), "--shards", str(a.shards), "--workers", "0", "--limit", str(c["limit"]),
+               "--out", str(s_out), check=False)
+    print(f"study exit {study.returncode}", flush=True)
+    exact = sh(sys.executable, "tools/exact_min.py", "run", "--data", "data", "--shard", str(a.shard), "--shards", str(a.shards),
+               "--time-limit", str(c["time_limit"]), "--limit", str(c["exact_limit"]), "--out", str(x_out), check=False)
+    print(f"exact exit {exact.returncode}", flush=True)
+    publish(a.shard, a.shards, [s_out, x_out], "study+exact")
+    print("\nResults are on the dcr-min-results branch. Exiting with status 3 ON PURPOSE so that exact.yml's "
+          "merge job (which commits to main) is skipped.", flush=True)
+    return 3
 
 
 if __name__ == "__main__":
