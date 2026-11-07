@@ -1,0 +1,116 @@
+name: Exact cost (paper 2)
+
+# CP-SAT deadline-constrained cost minimization of every 60-task dev and expansion instance, plus the
+# Lagrangian cost bound (tools/cost_bound.py) on every dev instance. Paper 1's exact check is untouched.
+# Results: results/exact/exact-cost-60.csv and results/bounds/bounds-dev.csv.
+
+on:
+  workflow_dispatch:
+    inputs:
+      shards:
+        description: "Parallel machines"
+        default: "20"
+      expansion:
+        description: "Also run the 60-task expansion instances"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: exact-cost
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - id: m
+        run: python3 -c "import json;print('matrix='+json.dumps(list(range(int('${{ inputs.shards }}')))))" >> "$GITHUB_OUTPUT"
+
+  bounds:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install --quiet -r requirements.txt numpy
+      - name: Download and verify data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/data.py fetch --set dev --out data/dev
+      - run: python3 tools/cost_bound.py --set dev --data data/dev --out .work/bounds-dev.csv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bounds-dev
+          path: .work/bounds-dev.csv
+          retention-days: 7
+
+  run:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: shard ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install --quiet -r requirements.txt numpy "ortools==9.12.4544"
+      - name: Download and verify data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/data.py fetch --set dev --out data/dev
+          if [ "${{ inputs.expansion }}" = "true" ]; then python3 tools/data.py fetch --set expansion --out data/expansion; fi
+      - name: Run shard
+        run: |
+          EXP=""
+          if [ "${{ inputs.expansion }}" = "true" ]; then EXP="--data-expansion data/expansion"; fi
+          python3 tools/exact_cost.py run --data-dev data/dev $EXP --shard ${{ matrix.shard }} --shards ${{ inputs.shards }} --out .work/xc-${{ matrix.shard }}.csv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-cost-${{ matrix.shard }}
+          path: .work/xc-${{ matrix.shard }}.csv
+          retention-days: 7
+
+  merge:
+    needs: [run, bounds]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: exact-cost-*
+          path: .work
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: bounds-dev
+          path: .work/bounds
+      - name: Merge and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for i in 1 2 3 4 5; do
+            git fetch -q origin "$GITHUB_REF_NAME" && git reset -q --hard "origin/$GITHUB_REF_NAME"
+            python3 tools/exact_cost.py merge --inputs ".work/xc-*.csv" --out results/exact/exact-cost-60.csv | tee -a "$GITHUB_STEP_SUMMARY"
+            mkdir -p results/bounds && cp .work/bounds/bounds-dev.csv results/bounds/bounds-dev.csv
+            git add results/exact/exact-cost-60.csv results/bounds/bounds-dev.csv
+            git commit -q -m "Paper 2: exact cost and cost bounds, 60-task instances [skip ci]" || exit 0
+            git push -q origin "HEAD:$GITHUB_REF_NAME" && exit 0
+            sleep $((5 * i))
+          done
+          exit 1
