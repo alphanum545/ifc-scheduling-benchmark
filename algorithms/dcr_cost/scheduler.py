@@ -215,6 +215,114 @@ class DCRCostPortfolioScheduler(DCRCostScheduler):
         return DCRCostScheduler._schedule_with(self, scheduling_input, gamma)
 
 
+class _Simulator:
+    """Exact replica of generator.schedule.build_schedule for a fixed task order: tasks in order, ready time
+    = max over parents of (parent end + tier-route communication, 0 on the same resource), then the earliest
+    idle slot on the assigned resource (insertion). Public instance data only."""
+
+    def __init__(self, md: Model, order: list[int]) -> None:
+        self.md, self.order = md, order
+        tiers = sorted(set(md.tiers))
+        self.tier_of = [tiers.index(t) for t in md.tiers]
+        ex = {t: [r for r in range(len(md.resources)) if md.tiers[r] == t] for t in tiers}
+        self.comm = {}
+        for (i, j) in md.bits:
+            table = [[None] * len(tiers) for _ in tiers]
+            for a, ta in enumerate(tiers):
+                for b, tb in enumerate(tiers):
+                    src = ex[ta][0]
+                    dst = next((q for q in ex[tb] if q != src), None)
+                    if dst is not None:
+                        table[a][b] = md.delay(i, j, src, dst)
+            self.comm[i, j] = table
+
+    def makespan(self, assign: list[int], limit: int | None = None) -> int:
+        md = self.md
+        end, cals = [0] * len(assign), [[] for _ in md.resources]
+        worst = 0
+        for i in self.order:
+            r = assign[i]
+            ready = 0
+            for p in md.parents[i]:
+                rp = assign[p]
+                d = 0 if rp == r else self.comm[p, i][self.tier_of[rp]][self.tier_of[r]]
+                if end[p] + d > ready:
+                    ready = end[p] + d
+            dur = md.p[i][r]
+            start = ready
+            cal = cals[r]
+            pos = 0
+            for pos, (s, e) in enumerate(cal):
+                if start + dur <= s:
+                    break
+                if start < e:
+                    start = e
+            else:
+                pos = len(cal)
+            cal.insert(pos, (start, start + dur))
+            end[i] = start + dur
+            if end[i] > worst:
+                worst = end[i]
+                if limit is not None and worst > limit:
+                    return worst  # early exit: already infeasible
+        return worst
+
+
+def improve(md: Model, order: list[int], assign: list[int], max_tries_per_task: int = 3,
+            max_passes: int = 2) -> tuple[list[int], dict]:
+    """First-improvement downgrade search: move a task to a cheaper resource if the exact rebuild still
+    meets D. Tasks by largest possible saving first; per task, cheaper resources by ascending cost, at most
+    max_tries_per_task rebuilds. Every accepted move keeps makespan <= D, so feasibility is preserved."""
+    sim = _Simulator(md, order)
+    D = md.D
+    assign = list(assign)
+    stats = {"improve_moves": 0, "improve_rebuilds": 0, "improve_saving_ncu": 0, "improve_passes": 0}
+    if sim.makespan(assign) > D:
+        stats["improve_skipped"] = "start_plan_misses_deadline"
+        return assign, stats
+    for _ in range(max_passes):
+        stats["improve_passes"] += 1
+        moved = False
+        tasks = sorted(range(len(assign)), key=lambda i: (-(md.c[i][assign[i]] - md.cmin[i]), i))
+        for i in tasks:
+            cur = assign[i]
+            options = sorted((q for q in range(len(md.resources)) if md.c[i][q] < md.c[i][cur]),
+                             key=lambda q: (md.c[i][q], md.p[i][q], q))[:max_tries_per_task]
+            for q in options:
+                assign[i] = q
+                stats["improve_rebuilds"] += 1
+                if sim.makespan(assign, limit=D) <= D:
+                    stats["improve_moves"] += 1
+                    stats["improve_saving_ncu"] += md.c[i][cur] - md.c[i][q]
+                    moved = True
+                    break
+                assign[i] = cur
+        if not moved:
+            break
+    return assign, stats
+
+
+class DCRCostImprovedScheduler(DCRCostPortfolioScheduler):
+    """Step 3: the portfolio plan followed by the downgrade improvement pass (same task order)."""
+    algorithm_id = "dcr_cost_improved"
+    algorithm_version = "dcr_cost_improved_design_20261108_impl1"
+
+    def schedule(self, scheduling_input: AlgorithmInput, *, seed: int | None = None) -> AlgorithmDecision:
+        d = super().schedule(scheduling_input, seed=seed)
+        md = Model.create(scheduling_input)
+        idx_t = {t: i for i, t in enumerate(md.tasks)}
+        idx_r = {r: q for q, r in enumerate(md.resources)}
+        order = [idx_t[t] for t in d.task_order]
+        assign = [0] * len(md.tasks)
+        for t, r in d.resource_assignments.items():
+            assign[idx_t[t]] = idx_r[r]
+        new, st = improve(md, order, assign)
+        mapping = {md.tasks[i]: md.resources[new[i]] for i in range(len(md.tasks))}
+        stats = dict(d.internal_statistics, **st)
+        stats["internal_compute_cost_ncu"] = sum(md.c[i][new[i]] for i in range(len(md.tasks)))
+        return AlgorithmDecision(d.task_order, mapping, stats)
+
+
 class DCRCostCheapestScheduler(DCRCostScheduler):
     """Ablation: same screens, rank by the placement's own cost only."""
     algorithm_id = "dcr_cost_cheapest"

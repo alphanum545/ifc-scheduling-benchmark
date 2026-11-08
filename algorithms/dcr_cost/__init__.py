@@ -1,3 +1,3 @@
-from .scheduler import DCRCostScheduler, DCRCostCheapestScheduler, DCRCostPortfolioScheduler
+from .scheduler import DCRCostScheduler, DCRCostCheapestScheduler, DCRCostPortfolioScheduler, DCRCostImprovedScheduler
 
-__all__ = ["DCRCostScheduler", "DCRCostCheapestScheduler", "DCRCostPortfolioScheduler"]
+__all__ = ["DCRCostScheduler", "DCRCostCheapestScheduler", "DCRCostPortfolioScheduler", "DCRCostImprovedScheduler"]
