@@ -29,7 +29,7 @@ from hashlib import sha256
 
 from generator.canonical import canonical_json_bytes
 from algorithms.common.interface import AlgorithmContractError, AlgorithmDecision, AlgorithmInput
-from algorithms.dcr_ifc.model import Model
+from algorithms.dcr_ifc.model import Model, overlap
 from algorithms.dcr_ifc.reserve import dot
 from algorithms.dcr_ifc.state import MonotoneChoices
 from algorithms.dcr_ifc_optimized.state import State
@@ -99,10 +99,104 @@ class CostPool(ReservePool):
         self._order_size, self._spent, self._capacity = None, 0, []
 
 
+class ChainCostPool(CostPool):
+    """Capacity + chain prices. A chain P of the DAG runs sequentially, so sum_{j in P} p_{j,x(j)} <= D.
+    Violated chains are generated on the fly (algorithms/dcr_cost/relaxation.py). Committed tasks are fixed
+    to their resource (cost 0, capacity already deducted from K), so their chain durations count as constants.
+
+    Price vector l has chain coefficients coef_l[j] (sum of mu_P over chains P containing j; 0, mu, mu/2).
+    Remaining-task weights gain H*coef_l[j]*p_jr; the constant  H*sum_{committed j} coef_l[j]*p_j - H*D*sum mu_l
+    is kept separately and added to every total and candidate bound, so each vector stays a valid bound."""
+
+    def __init__(self, state) -> None:
+        import numpy as np
+        from .relaxation import subgradient_chain
+
+        md = state.model
+        n, m, k = len(md.tasks), len(md.resources), len(md.theta)
+        c = np.array(md.c, dtype=np.int64)
+        g = np.array(md.g, dtype=np.int64)
+        mask = np.array(state.active, dtype=bool)
+        for j, (r, _, _) in state.placements.items():
+            c[j, :] = 0
+            g[j, :, :] = 0
+            mask[j, :] = False
+            mask[j, r] = True
+        p = np.array(md.p, dtype=np.int64)
+        target = float(np.where(mask, c, -1).max(1).sum()) + 1.0
+        zf, paths, mu = subgradient_chain(c, g, np.array(state.K, dtype=np.int64), mask, p,
+                                          list(md.topological), md.parents, md.D, target, iters=SG_ITERS)
+        coef = np.zeros(n)
+        for P, u in zip(paths, mu):
+            coef[P] += u
+        Z1 = [[int(round(md.H * zf[r][t])) for t in range(k)] for r in range(m)]
+        C1 = [int(round(md.H * v)) for v in coef]
+        self.prices = [[[0] * k for _ in range(m)], Z1, [[v // 2 for v in row] for row in Z1]]
+        self.coef = [[0] * n, C1, [v // 2 for v in C1]]
+        musum = int(round(md.H * float(mu.sum())))
+        self.mu_const = [0, -md.D * musum, -md.D * (musum // 2)]
+        self.weights, self.choices = [], []
+        for z, cf in zip(self.prices, self.coef):
+            weights = {j: [md.H * md.c[j][r] + dot(z[r], md.g[j][r]) + cf[j] * md.p[j][r] for r in range(m)]
+                       for j in state.U}
+            orders = {j: sorted((r for r in range(m) if state.active[j][r]),
+                                key=lambda r: (weights[j][r], md.p[j][r], r)) for j in state.U}
+            if any(not o for o in orders.values()):
+                raise ValueError("cannot price an empty resource domain")
+            self.weights.append(weights)
+            self.choices.append({j: MonotoneChoices(o) for j, o in orders.items()})
+        self.minimum, self.totals, self.current = [], [], 0
+        self._order_size, self._spent, self._capacity = None, 0, []
+        self._fixed = [sum(cf[j] * md.p[j][r] for j, (r, _, _) in state.placements.items()) for cf in self.coef]
+        self._fixed_count = len(state.order)
+
+    def _const(self, state) -> list[int]:
+        md = state.model
+        for j in state.order[self._fixed_count:]:
+            r = state.placements[j][0]
+            for ell, cf in enumerate(self.coef):
+                self._fixed[ell] += cf[j] * md.p[j][r]
+        self._fixed_count = len(state.order)
+        return [f + mc for f, mc in zip(self._fixed, self.mu_const)]
+
+    def refresh_minima(self, state) -> None:
+        super().refresh_minima(state)
+        self.adjusted = [t + k for t, k in zip(self.totals, self._const(state))]
+        self.adjusted_current = max(self.adjusted)
+
+    def candidate_bounds(self, state, i, r, start, finish, deleted):
+        if r in self.empty:
+            return None
+        md = state.model
+        occupation = tuple(overlap(start, finish, 0, theta) for theta in md.theta)
+        capacity, arrival = [], []
+        for ell, z in enumerate(self.prices):
+            w, mins = self.weights[ell], self.minimum[ell]
+            base = (self.adjusted[ell] + md.H * md.c[i][r] + self.coef[ell][i] * md.p[i][r]
+                    - w[i][mins[i][0]] + dot(z[r], occupation))
+            old, new = base, base + self.arrival_delta[r][ell]
+            for j in deleted:
+                first, second = mins[j]
+                if first == r:
+                    if second is None:
+                        raise ArithmeticError("candidate removes the only capacity option")
+                    delta = w[j][second] - w[j][first]
+                    old += delta
+                    if j not in self.child_set:
+                        new += delta
+            capacity.append(old)
+            arrival.append(new)
+        old, new = max(capacity), max(arrival)
+        if not self.adjusted_current <= old <= new:
+            raise ArithmeticError("reserve monotonicity violated")
+        return old, new
+
+
 class DCRCostScheduler:
     algorithm_id = "dcr_cost_bound"
     algorithm_version = "dcr_cost_bound_design_20261108_impl1"
     rank = "bound"  # bound | cheapest
+    pool_class = CostPool
 
     def schedule(self, scheduling_input: AlgorithmInput, *, seed: int | None = None) -> AlgorithmDecision:
         if seed is not None:
@@ -129,7 +223,7 @@ class DCRCostScheduler:
                     reason = "negative_time_margin"
                 else:
                     if len(st.order) in md.epochs or pool is None:
-                        pool = CostPool(st)
+                        pool = self.pool_class(st)
                         stats["price_refresh_count"] += 1
                     pool.refresh_minima(st)
                     candidates = {}
@@ -321,6 +415,13 @@ class DCRCostImprovedScheduler(DCRCostPortfolioScheduler):
         stats = dict(d.internal_statistics, **st)
         stats["internal_compute_cost_ncu"] = sum(md.c[i][new[i]] for i in range(len(md.tasks)))
         return AlgorithmDecision(d.task_order, mapping, stats)
+
+
+class DCRCostChainImprovedScheduler(DCRCostImprovedScheduler):
+    """Portfolio + improvement, with capacity + chain prices in the ranking bound."""
+    algorithm_id = "dcr_cost_chain_improved"
+    algorithm_version = "dcr_cost_chain_improved_design_20261108_impl1"
+    pool_class = ChainCostPool
 
 
 class DCRCostCheapestScheduler(DCRCostScheduler):

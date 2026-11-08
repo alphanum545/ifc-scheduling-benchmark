@@ -95,6 +95,44 @@ def subgradient(c, g, K, mask, target: float, iters: int = SG_ITERS):
     return best_z
 
 
+from algorithms.dcr_cost.relaxation import MAX_PATHS, subgradient_chain  # noqa: E402,F401
+
+
+def lagrangian_chain_exact(c, g, K, mask, p, D, z, paths, mu) -> Fraction:
+    """Exact L(z, mu) for the capacity + chain relaxation (valid for any z >= 0, mu >= 0)."""
+    zf = [[Fraction(v) for v in row] for row in z]
+    muf = [Fraction(float(u)) for u in mu]
+    n, m, k = g.shape
+    coef = [Fraction(0)] * n
+    for P, u in zip(paths, muf):
+        if u:
+            for j in P:
+                coef[int(j)] += u
+    total = Fraction(0)
+    for j in range(n):
+        best = None
+        for r in range(m):
+            if mask[j, r]:
+                w = (Fraction(int(c[j, r])) + coef[j] * int(p[j, r]) +
+                     sum(zf[r][t] * int(g[j, r, t]) for t in range(k) if g[j, r, t]))
+                best = w if best is None or w < best else best
+        total += best
+    return (total - sum(zf[r][t] * int(K[r, t]) for r in range(m) for t in range(k))
+            - D * sum(muf, Fraction(0)))
+
+
+def bound_chain(inp, c_ref: int) -> dict:
+    """Capacity + chain bound (paper 2, step 1 of the floor work)."""
+    import numpy as np
+    md, st, c, g, K, mask = _arrays(inp)
+    p = np.array(md.p, dtype=np.int64)
+    target = float(c_ref) if c_ref else float(np.where(mask, c, -1).max(1).sum()) + 1.0
+    z, paths, mu = subgradient_chain(c, g, K, mask, p, list(md.topological), md.parents, md.D, target)
+    lb = lagrangian_chain_exact(c, g, K, mask, p, md.D, z.tolist(), paths, mu)
+    return {"LB_chain": math.ceil(max(lb, Fraction(0))), "chain_paths": len(paths),
+            "chain_paths_active": int(sum(1 for u in mu if u > 0))}
+
+
 def bounds(inp, c_ref: int) -> dict:
     import numpy as np
     from algorithms.dcr_ifc_v1.reserve import ReservePool
