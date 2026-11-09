@@ -23,10 +23,17 @@ from generator.reference_schedulers import _candidate_assignment, _commit_assign
 SPLIT_GRID = (Fraction(0), Fraction(1, 2), Fraction(1))
 
 
-def deadline_split(instance: dict, D: int, lam: Fraction) -> tuple[list[str], dict[str, str], int, int]:
-    """Return (task order, mapping, internal makespan, internal cost)."""
+def prepare(instance: dict) -> tuple:
     g = _graph(instance)
     _, _, avg_comm = _upward_ranks(instance, g)
+    return g, avg_comm
+
+
+def deadline_split(instance: dict, D: int, lam: Fraction, prepared: tuple | None = None
+                   ) -> tuple[list[str], dict[str, str], int, int]:
+    """Return (task order, mapping, internal makespan, internal cost). `prepared` = prepare(instance), shared
+    across the lambda grid (the route-aware average communication does not depend on lambda)."""
+    g, avg_comm = prepared if prepared is not None else prepare(instance)
     exe = instance["execution_time_us"]
     cost = instance["compute_cost_ncu"]
     fast = {t: min(int(exe[t][r]) for r in g.resource_ids) for t in g.task_ids}
