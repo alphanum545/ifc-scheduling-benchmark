@@ -85,7 +85,7 @@ def select_algos(arg: str, reg: dict) -> list[str]:
 
 
 def load_scheduler(spec: dict):
-    return getattr(importlib.import_module(spec["module"]), spec["class"])()
+    return getattr(importlib.import_module(spec["module"]), spec["class"])(**spec.get("params", {}))
 
 
 # --------------------------------------------------------------------------- instances
