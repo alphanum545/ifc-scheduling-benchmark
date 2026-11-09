@@ -306,3 +306,130 @@ class = "BDHEFTScheduler_09"
 role = "tuning"
 enabled = false
 sources = ["algorithms/tuning", "algorithms/bdheft", "algorithms/common", "algorithms/__init__.py"]
+
+# ---------------------------------------------------------------------------------------------
+# Paper 2: deadline-constrained cost minimization (docs/proposed/DCR_COST_V2_2026-11-09.md).
+# enabled = false keeps these out of "all" (paper 1 reports); run them by name.
+# `params` are passed to the class constructor (used for ProLiS's seed; the paper averages 10 runs).
+
+[dcr-cost-v1]
+label = "DCR-Cost v1 (portfolio + improvement)"
+module = "algorithms.dcr_cost"
+class = "DCRCostImprovedScheduler"
+role = "proposed"
+enabled = false
+sources = ["algorithms/dcr_cost", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+[dcr-cost-v2]
+label = "DCR-Cost v2 (+ deadline-split candidates)"
+module = "algorithms.dcr_cost"
+class = "DCRCostSplitScheduler"
+role = "proposed"
+enabled = false
+sources = ["algorithms/dcr_cost", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
+[cmas]
+label = "CMaS"
+module = "algorithms.paper2_baselines"
+class = "CMaSScheduler"
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[icpcp]
+label = "IC-PCP"
+module = "algorithms.paper2_baselines"
+class = "ICPCPScheduler"
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[prolis-s0]
+label = "ProLiS (seed 0)"
+module = "algorithms.paper2_baselines"
+class = "ProLiSScheduler"
+params = { seed = 0 }
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[prolis-s1]
+label = "ProLiS (seed 1)"
+module = "algorithms.paper2_baselines"
+class = "ProLiSScheduler"
+params = { seed = 1 }
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[prolis-s2]
+label = "ProLiS (seed 2)"
+module = "algorithms.paper2_baselines"
+class = "ProLiSScheduler"
+params = { seed = 2 }
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[prolis-s3]
+label = "ProLiS (seed 3)"
+module = "algorithms.paper2_baselines"
+class = "ProLiSScheduler"
+params = { seed = 3 }
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[prolis-s4]
+label = "ProLiS (seed 4)"
+module = "algorithms.paper2_baselines"
+class = "ProLiSScheduler"
+params = { seed = 4 }
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[prolis-s5]
+label = "ProLiS (seed 5)"
+module = "algorithms.paper2_baselines"
+class = "ProLiSScheduler"
+params = { seed = 5 }
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[prolis-s6]
+label = "ProLiS (seed 6)"
+module = "algorithms.paper2_baselines"
+class = "ProLiSScheduler"
+params = { seed = 6 }
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[prolis-s7]
+label = "ProLiS (seed 7)"
+module = "algorithms.paper2_baselines"
+class = "ProLiSScheduler"
+params = { seed = 7 }
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[prolis-s8]
+label = "ProLiS (seed 8)"
+module = "algorithms.paper2_baselines"
+class = "ProLiSScheduler"
+params = { seed = 8 }
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[prolis-s9]
+label = "ProLiS (seed 9)"
+module = "algorithms.paper2_baselines"
+class = "ProLiSScheduler"
+params = { seed = 9 }
+role = "comparator"
+enabled = false
+sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
