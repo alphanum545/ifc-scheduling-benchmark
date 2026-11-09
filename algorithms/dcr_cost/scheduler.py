@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from bisect import bisect_right
+from operator import itemgetter
 from fractions import Fraction
 from hashlib import sha256
 
@@ -36,6 +38,7 @@ from algorithms.dcr_ifc_optimized.state import State
 from algorithms.dcr_ifc_v1.reserve import ReservePool
 
 DESIGN_VERSION = "dcr_cost_design_20261108"
+_END = itemgetter(1)
 SG_ITERS = 200
 
 
@@ -363,8 +366,11 @@ class _Simulator:
             dur = md.p[i][r]
             start = ready
             cal = cals[r]
-            pos_ = 0
-            for pos_, (s, e, _) in enumerate(cal):
+            # Intervals ending at or before `start` can neither hold the task nor push it: skip them
+            # (calendars are disjoint and sorted, so their ends are sorted too).
+            pos_ = bisect_right(cal, start, key=_END)
+            for pos_ in range(pos_, len(cal)):
+                s, e, _ = cal[pos_]
                 if start + dur <= s:
                     break
                 if start < e:
@@ -405,8 +411,9 @@ def improve(md: Model, order: list[int], assign: list[int], max_tries_per_task: 
             for q in options:
                 assign[i] = q
                 stats["improve_rebuilds"] += 1
-                if sim.run(assign, k=sim.pos[i], base=base, limit=D)[0] <= D:
-                    base = sim.run(assign)[1:]  # new prefix source after an accepted move
+                trial = sim.run(assign, k=sim.pos[i], base=base, limit=D)
+                if trial[0] <= D:
+                    base = trial[1:]  # no early exit happened, so this is the complete new run
                     stats["improve_moves"] += 1
                     stats["improve_saving_ncu"] += md.c[i][cur] - md.c[i][q]
                     moved = True
@@ -465,7 +472,7 @@ class DCRCostSplitScheduler(DCRCostPortfolioScheduler):
     algorithm_version = "dcr_cost_split_design_20261109_impl1"
 
     def schedule(self, scheduling_input: AlgorithmInput, *, seed: int | None = None) -> AlgorithmDecision:
-        from .split import SPLIT_GRID, deadline_split
+        from .split import SPLIT_GRID, deadline_split, prepare
         if seed is not None:
             raise AlgorithmContractError("DCR-Cost is deterministic and accepts seed=None only")
         D = scheduling_input.deadline_us
@@ -482,8 +489,9 @@ class DCRCostSplitScheduler(DCRCostPortfolioScheduler):
         if not any_bound_ok:  # exactly when DCR-Cost v1 returns its guardrail: keep it as a candidate
             guard = self._guardrail(scheduling_input)
             cands.append(("guardrail_dcr_v1_admission", list(guard.task_order), dict(guard.resource_assignments)))
+        prepared = prepare(scheduling_input.instance)
         for lam in SPLIT_GRID:
-            order, mapping, _, _ = deadline_split(scheduling_input.instance, D, lam)
+            order, mapping, _, _ = deadline_split(scheduling_input.instance, D, lam, prepared)
             cands.append((f"split_lambda={lam}", order, mapping))
         tried, best = [], None
         for name, order_t, mapping in cands:
