@@ -294,11 +294,7 @@ class DCRCostPortfolioScheduler(DCRCostScheduler):
             if ok and (best is None or s["internal_compute_cost_ncu"] < best[1].internal_statistics["internal_compute_cost_ncu"]):
                 best = (gamma, d)
         if best is None:
-            from algorithms.dcr_ifc_v1.scheduler import DCRV1AdmissionScheduler
-            inst = scheduling_input.instance
-            unbinding = sum(max(int(v) for v in row.values()) for row in inst["compute_cost_ncu"].values())
-            guard_input = dataclasses.replace(scheduling_input, budget_ncu=unbinding)
-            d = DCRV1AdmissionScheduler().schedule(guard_input)
+            d = self._guardrail(scheduling_input)
             stats = dict(d.internal_statistics, portfolio=tried, chosen="guardrail_dcr_v1_admission")
             return AlgorithmDecision(d.task_order, d.resource_assignments, stats)
         gamma, d = best
@@ -308,6 +304,14 @@ class DCRCostPortfolioScheduler(DCRCostScheduler):
     def _run(self, scheduling_input, gamma):
         return DCRCostScheduler._schedule_with(self, scheduling_input, gamma)
 
+    @staticmethod
+    def _guardrail(scheduling_input):
+        """DCR-v1 Admission with an unbinding budget (its deadline screens only)."""
+        from algorithms.dcr_ifc_v1.scheduler import DCRV1AdmissionScheduler
+        inst = scheduling_input.instance
+        unbinding = sum(max(int(v) for v in row.values()) for row in inst["compute_cost_ncu"].values())
+        return DCRV1AdmissionScheduler().schedule(dataclasses.replace(scheduling_input, budget_ncu=unbinding))
+
 
 class _Simulator:
     """Exact replica of generator.schedule.build_schedule for a fixed task order: tasks in order, ready time
@@ -316,6 +320,7 @@ class _Simulator:
 
     def __init__(self, md: Model, order: list[int]) -> None:
         self.md, self.order = md, order
+        self.pos = {i: k for k, i in enumerate(order)}
         tiers = sorted(set(md.tiers))
         self.tier_of = [tiers.index(t) for t in md.tiers]
         ex = {t: [r for r in range(len(md.resources)) if md.tiers[r] == t] for t in tiers}
@@ -331,10 +336,23 @@ class _Simulator:
             self.comm[i, j] = table
 
     def makespan(self, assign: list[int], limit: int | None = None) -> int:
+        return self.run(assign, limit=limit)[0]
+
+    def run(self, assign: list[int], k: int = 0, base: tuple | None = None, limit: int | None = None):
+        """Simulate order[k:] on top of the prefix order[:k] taken from base = (end, cals) of an earlier full
+        run. Tasks before position k never depend on later tasks (they are placed first), so the result equals
+        a full rebuild. Returns (makespan, end, cals); with an early exit the last two are partial."""
         md = self.md
-        end, cals = [0] * len(assign), [[] for _ in md.resources]
-        worst = 0
-        for i in self.order:
+        if base is None or k == 0:
+            end, cals, worst = [0] * len(assign), [[] for _ in md.resources], 0
+            k = 0
+        else:
+            pos = self.pos
+            bend, bcals = base
+            end = list(bend)
+            cals = [[iv for iv in cal if pos[iv[2]] < k] for cal in bcals]
+            worst = max((end[self.order[j]] for j in range(k)), default=0)
+        for i in self.order[k:]:
             r = assign[i]
             ready = 0
             for p in md.parents[i]:
@@ -345,21 +363,21 @@ class _Simulator:
             dur = md.p[i][r]
             start = ready
             cal = cals[r]
-            pos = 0
-            for pos, (s, e) in enumerate(cal):
+            pos_ = 0
+            for pos_, (s, e, _) in enumerate(cal):
                 if start + dur <= s:
                     break
                 if start < e:
                     start = e
             else:
-                pos = len(cal)
-            cal.insert(pos, (start, start + dur))
+                pos_ = len(cal)
+            cal.insert(pos_, (start, start + dur, i))
             end[i] = start + dur
             if end[i] > worst:
                 worst = end[i]
                 if limit is not None and worst > limit:
-                    return worst  # early exit: already infeasible
-        return worst
+                    return worst, end, cals  # early exit: already infeasible
+        return worst, end, cals
 
 
 def improve(md: Model, order: list[int], assign: list[int], max_tries_per_task: int = 3,
@@ -371,9 +389,11 @@ def improve(md: Model, order: list[int], assign: list[int], max_tries_per_task: 
     D = md.D
     assign = list(assign)
     stats = {"improve_moves": 0, "improve_rebuilds": 0, "improve_saving_ncu": 0, "improve_passes": 0}
-    if sim.makespan(assign) > D:
+    ms, end, cals = sim.run(assign)
+    if ms > D:
         stats["improve_skipped"] = "start_plan_misses_deadline"
         return assign, stats
+    base = (end, cals)
     for _ in range(max_passes):
         stats["improve_passes"] += 1
         moved = False
@@ -385,7 +405,8 @@ def improve(md: Model, order: list[int], assign: list[int], max_tries_per_task: 
             for q in options:
                 assign[i] = q
                 stats["improve_rebuilds"] += 1
-                if sim.makespan(assign, limit=D) <= D:
+                if sim.run(assign, k=sim.pos[i], base=base, limit=D)[0] <= D:
+                    base = sim.run(assign)[1:]  # new prefix source after an accepted move
                     stats["improve_moves"] += 1
                     stats["improve_saving_ncu"] += md.c[i][cur] - md.c[i][q]
                     moved = True
@@ -429,3 +450,61 @@ class DCRCostCheapestScheduler(DCRCostScheduler):
     algorithm_id = "dcr_cost_cheapest"
     algorithm_version = "dcr_cost_cheapest_design_20261108_impl1"
     rank = "cheapest"
+
+
+class DCRCostSplitScheduler(DCRCostPortfolioScheduler):
+    """Step 4 (DCR-Cost v2): a wider candidate set, every feasible candidate improved.
+
+    Candidates: the bound-rule plans for every gamma in GRID; the DCR-v1 Admission guardrail when none of
+    them meets D by its own calendar (exactly when v1 returns the guardrail); and the deterministic
+    deadline-distribution plans for every lambda in split.SPLIT_GRID. So v2's candidates include v1's, and
+    v2 never costs more than v1. Each candidate whose exact rebuild meets D goes through the downgrade
+    improvement pass, and the cheapest improved plan is returned (ties: candidate order above). If no
+    candidate meets D, the guardrail is returned unimproved."""
+    algorithm_id = "dcr_cost_split"
+    algorithm_version = "dcr_cost_split_design_20261109_impl1"
+
+    def schedule(self, scheduling_input: AlgorithmInput, *, seed: int | None = None) -> AlgorithmDecision:
+        from .split import SPLIT_GRID, deadline_split
+        if seed is not None:
+            raise AlgorithmContractError("DCR-Cost is deterministic and accepts seed=None only")
+        D = scheduling_input.deadline_us
+        md = Model.create(scheduling_input)
+        idx_t = {t: i for i, t in enumerate(md.tasks)}
+        idx_r = {r: q for q, r in enumerate(md.resources)}
+        cands = []
+        any_bound_ok = False
+        for gamma in self.GRID:
+            d = self._run(scheduling_input, gamma)
+            any_bound_ok |= d.internal_statistics["internal_makespan_us"] <= D
+            cands.append((f"gamma={gamma}", list(d.task_order), dict(d.resource_assignments)))
+        guard = None
+        if not any_bound_ok:  # exactly when DCR-Cost v1 returns its guardrail: keep it as a candidate
+            guard = self._guardrail(scheduling_input)
+            cands.append(("guardrail_dcr_v1_admission", list(guard.task_order), dict(guard.resource_assignments)))
+        for lam in SPLIT_GRID:
+            order, mapping, _, _ = deadline_split(scheduling_input.instance, D, lam)
+            cands.append((f"split_lambda={lam}", order, mapping))
+        tried, best = [], None
+        for name, order_t, mapping in cands:
+            order = [idx_t[t] for t in order_t]
+            assign = [idx_r[mapping[md.tasks[i]]] for i in range(len(md.tasks))]
+            if _Simulator(md, order).makespan(assign) > D:
+                tried.append((name, False, None))
+                continue
+            new, st = improve(md, order, assign)
+            c = sum(md.c[i][new[i]] for i in range(len(new)))
+            tried.append((name, True, c))
+            if best is None or c < best[0]:
+                best = (c, name, order_t, new, st)
+        if best is None:  # no candidate meets D: return the guardrail, unimproved
+            g = guard if guard is not None else self._guardrail(scheduling_input)
+            order = [idx_t[t] for t in g.task_order]
+            new = [idx_r[g.resource_assignments[md.tasks[i]]] for i in range(len(md.tasks))]
+            best = (sum(md.c[i][new[i]] for i in range(len(new))), "guardrail_dcr_v1_admission",
+                    list(g.task_order), new, {"improve_skipped": "no_candidate_meets_deadline"})
+        c, name, order_t, new, st = best
+        mapping = {md.tasks[i]: md.resources[new[i]] for i in range(len(md.tasks))}
+        stats = dict(st, candidates=tried, chosen=name, internal_compute_cost_ncu=c,
+                     internal_makespan_us=_Simulator(md, [idx_t[t] for t in order_t]).makespan(new))
+        return AlgorithmDecision(tuple(order_t), mapping, stats)
