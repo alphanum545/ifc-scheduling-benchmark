@@ -4,9 +4,13 @@ and compare them with each other and with the stored CI runs.
 
   python3 tools/dcr_cost_study.py run    --set expansion --data data/expansion --step 12 --workers 2
   python3 tools/dcr_cost_study.py report --set expansion --step 12
+  python3 tools/dcr_cost_study.py compact --set expansion   # small per-instance extract for the repository
+  python3 tools/dcr_cost_study.py speed     # stored CI runs before/after the PR #15 speedups
 
-Sample (deterministic): every 60-task instance, plus every `--step`-th of the remaining instances in
-instance_id order. Runs use tools/bench.py's own per-instance routine, so timing, the pinned evaluator
+Sample (deterministic): every 60-task instance, plus, of the remaining instances in instance_id order
+(position k), those with k % step == 0 or k % (3 * step) in (step + 1, 2 * step + 2). With step = 12 the
+first rule only meets moderate-QoS instances (the QoS levels alternate in the id order); the second adds
+relaxed and tight ones. Runs use tools/bench.py's own per-instance routine, so timing, the pinned evaluator
 rebuild and the independent re-check are the same as in the Benchmark workflow. Output rows have the
 store's columns and go to results/paper2/dcr-cost-v3-<set>-sample.csv (not to results/store/: the
 store holds CI runs only). Instances are processed in a fixed pseudo-random order and saved one by
@@ -34,7 +38,8 @@ NEW, OLD = "dcr-cost-v3", "dcr-cost-v2"
 def sample(set_name: str, step: int) -> list[dict]:
     entries = sorted(bench.manifest(set_name)["entries"], key=lambda e: e["instance_id"])
     small = [e for e in entries if e["target_task_count"] == 60]
-    rest = [e for e in entries if e["target_task_count"] != 60][::step]
+    rest = [e for k, e in enumerate(e for e in entries if e["target_task_count"] != 60)
+            if k % step == 0 or k % (3 * step) in (step + 1, 2 * step + 2)]
     return sorted(small + rest, key=lambda e: hashlib.sha256(e["instance_id"].encode()).hexdigest())
 
 
@@ -90,7 +95,10 @@ def cmd_report(a: argparse.Namespace) -> int:
             if r["cost_ncu"]:
                 exact[r["instance_id"]] = r
     L = [f"Sample: {len(ids)} of {planned} planned instances of `{a.set}` "
-         f"(all 60-task instances plus every {a.step}th of the others).", ""]
+         f"(all 60-task instances plus a fixed selection of the others: step {a.step}, see the tool's docstring).", ""]
+    L.append("Larger instances by QoS: " + ", ".join(
+        f"{q} {sum(local[NEW, i]['qos'] == q and local[NEW, i]['tasks'] != '60' for i in ids)}"
+        for q in ("tight", "moderate", "relaxed")) + ".")
     new = {i: local[NEW, i] for i in ids}
     cost = lambda r: int(r["compute_cost_ncu"])  # noqa: E731
     ok = lambda r: r["deadline_met"] == "True"  # noqa: E731
@@ -154,10 +162,56 @@ def cmd_report(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_compact(a: argparse.Namespace) -> int:
+    """Small per-instance extract of the sample CSV (the full rows are about 0.6 MB). `index` is the
+    instance's position in the set's manifest sorted by instance_id."""
+    index = {e["instance_id"]: k for k, e in
+             enumerate(sorted(bench.manifest(a.set)["entries"], key=lambda e: e["instance_id"]))}
+    local = {(r["algo"], r["instance_id"]): r for r in bench.read_store(out_path(a.set))}
+    out = OUT_DIR / f"dcr-cost-v3-{a.set}-sample-compact.csv"
+    with open(out, "w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh, lineterminator="\n")
+        w.writerow(["index", "v3_compute_cost_ncu", "v3_makespan_us", "v2_runtime_ms", "v3_runtime_ms"])
+        for i in sorted({i for (n, i) in local if n == NEW}, key=index.get):
+            v3, v2 = local[NEW, i], local.get((OLD, i))
+            w.writerow([index[i], v3["compute_cost_ncu"], v3["makespan_us"],
+                        int(v2["runtime_ns"]) // 10 ** 6 if v2 else "", int(v3["runtime_ns"]) // 10 ** 6])
+    print(out)
+    return 0
+
+
+def cmd_speed(a: argparse.Namespace) -> int:
+    """Before/after of a result-preserving change, from the store alone: the same instances under two
+    source hashes of one algorithm (default: the hashes before and after PR #15)."""
+    L = ["| algorithm | tasks | n | schedules differing | before median (s) | after median (s) | "
+         "after ÷ before, median | same CPU model: n | after ÷ before, median |",
+         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
+    for name in a.algos.split(","):
+        by: dict[str, dict] = {}
+        for r in bench.read_store(bench.STORE_DIR / f"{name}.csv"):
+            if r["status"] == "ok":
+                by.setdefault(r["instance_id"], {})[r["source_sha256"]] = r
+        pairs = [(d[h0], d[h1]) for d in by.values()
+                 for h0 in d if h0.startswith(a.before) for h1 in d if h1.startswith(a.after)]
+        for t in (60, 100, 200, 400, 600, 800, 1000):
+            m = [(o, n) for o, n in pairs if o["tasks"] == str(t)]
+            if not m:
+                continue
+            diff = sum(any(o[k] != n[k] for k in ("schedule_sha256", "makespan_us", "compute_cost_ncu", "deadline_met"))
+                       for o, n in m)
+            sec = lambda r: int(r["runtime_ns"]) / 1e9  # noqa: E731
+            same = [sec(n) / sec(o) for o, n in m if o["cpu"] == n["cpu"]]
+            L.append(f"| {name} | {t} | {len(m)} | {diff} | {statistics.median(sec(o) for o, _ in m):.2f} | "
+                     f"{statistics.median(sec(n) for _, n in m):.2f} | {statistics.median(sec(n) / sec(o) for o, n in m):.2f} | "
+                     f"{len(same)} | {statistics.median(same) if same else float('nan'):.2f} |")
+    print("\n".join(L))
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("run", "report"):
+    for name in ("run", "report", "compact"):
         s = sub.add_parser(name)
         s.add_argument("--set", default="expansion")
         s.add_argument("--step", type=int, default=12)
@@ -165,8 +219,12 @@ def main() -> int:
             s.add_argument("--data", required=True)
             s.add_argument("--algos", default=f"{OLD},{NEW}")
             s.add_argument("--workers", type=int, default=1)
+    s = sub.add_parser("speed")
+    s.add_argument("--algos", default="dcr-cost-v1,dcr-cost-v2")
+    s.add_argument("--before", default="8a0c28ab", help="source hash prefix before the change")
+    s.add_argument("--after", default="6703943e", help="source hash prefix after the change")
     a = p.parse_args()
-    return {"run": cmd_run, "report": cmd_report}[a.cmd](a)
+    return {"run": cmd_run, "report": cmd_report, "compact": cmd_compact, "speed": cmd_speed}[a.cmd](a)
 
 
 if __name__ == "__main__":
