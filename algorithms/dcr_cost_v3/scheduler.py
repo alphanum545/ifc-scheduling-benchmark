@@ -20,8 +20,9 @@ Added on top of v2 (v2's sources are untouched, so its stored results stay valid
      pass tries up to DEEP_TRIES cheaper resources per task and passes repeat until no move is found
      (at most DEEP_REBUILDS_PER_TASK * n exact rebuilds).
 
-Dominance: v2's returned plan is always a candidate and the polish only accepts moves that lower cost
-and keep the exact rebuild within D, so v3 never costs more than v2 and meets D whenever v2 does.
+Conditional dominance: when v2 meets D, its plan remains a candidate and every polish move
+lowers cost while retaining deadline feasibility; v3 costs no more than feasible v2.
+When v2 misses D, a feasible priced candidate may be selected even at a higher cost.
 Deterministic; integer/rational arithmetic only in the new parts.
 """
 from __future__ import annotations
@@ -147,7 +148,7 @@ def deep_improve(md: Model, order: list[int], assign: list[int], tries: int = DE
 
 
 class DCRCostPricedScheduler(DCRCostSplitScheduler):
-    """DCR-Cost v3 = v2's plan, the improved time-priced plans, cheapest one polished. Never costlier than v2."""
+    """DCR-Cost v3 = v2's plan, the improved time-priced plans, cheapest one polished. Cost-dominant when v2 meets D."""
     algorithm_id = "dcr_cost_priced"
     algorithm_version = "dcr_cost_priced_design_20261110_impl1"
 
