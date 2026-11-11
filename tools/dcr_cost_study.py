@@ -5,6 +5,7 @@ and compare them with each other and with the stored CI runs.
   python3 tools/dcr_cost_study.py run    --set expansion --data data/expansion --step 12 --workers 2
   python3 tools/dcr_cost_study.py report --set expansion --step 12
   python3 tools/dcr_cost_study.py compact --set expansion   # small per-instance extract for the repository
+  python3 tools/dcr_cost_study.py pair      # reconstruct paired cost/makespan extract from committed data
   python3 tools/dcr_cost_study.py speed     # stored CI runs before/after the PR #15 speedups
 
 Sample (deterministic): every 60-task instance, plus, of the remaining instances in instance_id order
@@ -47,17 +48,44 @@ def out_path(set_name: str) -> Path:
     return OUT_DIR / f"dcr-cost-v3-{set_name}-sample.csv"
 
 
+def plan_resume(previous: list[dict], planned: list[dict], algos: list[str],
+                expected_hashes: dict[str, str]) -> tuple[list[dict], set[str]]:
+    """Keep only validated, current-source rows for requested algorithms.
+
+    Resume *per instance and algorithm*, never from the presence of a single row.
+    Rerun every selected algorithm on an incomplete instance, removing its old
+    rows before appending fresh results (no duplicates across partial restarts).
+    Rows from algorithms not requested in this run are preserved.
+    """
+    requested = set(algos)
+    good = [r for r in previous
+            if r.get("algo") not in requested or (
+                r.get("source_sha256") == expected_hashes[r["algo"]]
+                and r.get("status") == "ok" and r.get("valid") == "True")]
+    have = {(r["instance_id"], r["algo"]) for r in good if r.get("algo") in requested}
+    missing = {e["instance_id"] for e in planned
+               if any((e["instance_id"], name) not in have for name in algos)}
+    kept = [r for r in good if not (r.get("instance_id") in missing and r.get("algo") in requested)]
+    return kept, missing
+
+
 def cmd_run(a: argparse.Namespace) -> int:
     import multiprocessing as mp
 
     algos = [x.strip() for x in a.algos.split(",") if x.strip()]
     plan = {"set": a.set, "reps": 1, "workers": a.workers, "algos": algos}
     out = out_path(a.set)
-    rows = bench.read_store(out) if out.exists() else []
-    done = {r["instance_id"] for r in rows}
+    reg = bench.registry()
+    if not algos or len(set(algos)) != len(algos) or any(name not in reg for name in algos):
+        raise ValueError("provide distinct, registered algorithm names")
+    expected_hashes = {name: reg[name]["source_sha256"] for name in algos}
+    previous = bench.read_store(out) if out.exists() else []
+    planned = sample(a.set, a.step)
+    rows, missing = plan_resume(previous, planned, algos, expected_hashes)
     todo = [{"instance_id": e["instance_id"], "algos": algos, "tasks": e["target_task_count"]}
-            for e in sample(a.set, a.step) if e["instance_id"] not in done]
-    print(f"{len(done)} instances done, {len(todo)} to do, {a.workers} worker(s)", flush=True)
+            for e in planned if e["instance_id"] in missing]
+    print(f"{len(planned)-len(todo)} complete instances, {len(todo)} to do, {a.workers} worker(s)",
+          flush=True)
     with mp.get_context("fork").Pool(a.workers, initializer=bench._init_worker, initargs=(plan, a.data)) as pool:
         for k, got in enumerate(pool.imap_unordered(bench._run_instance, todo), 1):
             rows += got
@@ -81,7 +109,13 @@ def _q(values, q):
 def cmd_report(a: argparse.Namespace) -> int:
     rows = bench.read_store(out_path(a.set))
     reg = bench.registry()
-    local = {(r["algo"], r["instance_id"]): r for r in rows if r["status"] == "ok"}
+    current_hashes = {name: spec["source_sha256"] for name, spec in reg.items()}
+    planned_ids = {e["instance_id"] for e in sample(a.set, a.step)}
+    local = {(r["algo"], r["instance_id"]): r for r in rows
+             if r.get("instance_id") in planned_ids
+             and r.get("algo") in current_hashes
+             and r.get("source_sha256") == current_hashes[r["algo"]]
+             and r.get("status") == "ok" and r.get("valid") == "True"}
     ids = sorted({i for (n, i) in local if n == NEW})
     planned = len(sample(a.set, a.step))
     stored = {}
@@ -180,6 +214,74 @@ def cmd_compact(a: argparse.Namespace) -> int:
     return 0
 
 
+def pair_compact(compact: list[dict], manifest_entries: list[dict],
+                 stored_old: list[dict], source_sha: str) -> list[dict]:
+    """Join the committed v3 extract to source-matched stored v2 schedules.
+
+    This adds missing paired cost/makespan fields. The historical compact v3
+    extract does not include the v3 schedule hash or evaluator validation data;
+    those facts cannot be reconstructed and are *not* claimed here.
+    """
+    ids = [e["instance_id"] for e in sorted(manifest_entries, key=lambda e: e["instance_id"])]
+    old = {r["instance_id"]: r for r in stored_old
+           if r.get("source_sha256") == source_sha
+           and r.get("status") == "ok" and r.get("valid") == "True"}
+    paired, seen = [], set()
+    for r in compact:
+        idx = int(r["index"])
+        if idx < 0 or idx >= len(ids) or idx in seen:
+            raise ValueError(f"invalid or duplicate instance index: {idx}")
+        seen.add(idx)
+        instance_id = ids[idx]
+        if instance_id not in old:
+            raise ValueError(f"no validated current-source v2 baseline for {instance_id}")
+        v2 = old[instance_id]
+        cost2, cost3 = int(v2["compute_cost_ncu"]), int(r["v3_compute_cost_ncu"])
+        ms2, ms3 = int(v2["makespan_us"]), int(r["v3_makespan_us"])
+        deadline = int(v2["deadline_us"])
+        if cost2 <= 0 or cost3 <= 0 or ms3 > deadline:
+            raise ValueError(f"invalid costs or v3 deadline miss for {instance_id}")
+        paired.append({
+            "index": idx, "instance_id": instance_id,
+            "v2_compute_cost_ncu": cost2, "v3_compute_cost_ncu": cost3,
+            "v2_makespan_us": ms2, "v3_makespan_us": ms3,
+            "deadline_us": deadline,
+            "v2_runtime_ms_local": r["v2_runtime_ms"],
+            "v3_runtime_ms_local": r["v3_runtime_ms"],
+            "v2_source_sha256": source_sha,
+        })
+    return sorted(paired, key=lambda x: x["index"])
+
+
+def cmd_pair(a: argparse.Namespace) -> int:
+    """Reconstruct a paired extract from two *committed* artifacts, without benchmarking.
+
+    v2 values come from the source-verified CI store; v3 comes from the original
+    compact extract. For full per-run metadata and independent v3 verification,
+    rerun the study and keep its complete CSV.
+    """
+    source = OUT_DIR / f"dcr-cost-v3-{a.set}-sample-compact.csv"
+    with source.open(newline="", encoding="utf-8") as fh:
+        compact = list(csv.DictReader(fh))
+    version = bench.registry()[OLD]["source_sha256"]
+    stored = bench.read_store(bench.STORE_DIR / f"{OLD}.csv")
+    joined = pair_compact(compact, bench.manifest(a.set)["entries"], stored, version)
+    if len(joined) != len(compact):
+        raise ValueError("incomplete paired extract")
+    target = OUT_DIR / f"dcr-cost-v3-{a.set}-sample-paired.csv"
+    with target.open("w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(joined[0]))
+        w.writeheader()
+        w.writerows(joined)
+    ratios = [r["v3_compute_cost_ncu"] / r["v2_compute_cost_ncu"] for r in joined]
+    wins = sum(r["v3_compute_cost_ncu"] < r["v2_compute_cost_ncu"] for r in joined)
+    ties = sum(r["v3_compute_cost_ncu"] == r["v2_compute_cost_ncu"] for r in joined)
+    losses = len(joined) - wins - ties
+    print(f"{target}: {len(joined)} paired rows; mean ratio {statistics.mean(ratios):.6f}; "
+          f"v3 cheaper/equal/costlier = {wins}/{ties}/{losses}")
+    return 0
+
+
 def cmd_speed(a: argparse.Namespace) -> int:
     """Before/after of a result-preserving change, from the store alone: the same instances under two
     source hashes of one algorithm (default: the hashes before and after PR #15)."""
@@ -211,7 +313,7 @@ def cmd_speed(a: argparse.Namespace) -> int:
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("run", "report", "compact"):
+    for name in ("run", "report", "compact", "pair"):
         s = sub.add_parser(name)
         s.add_argument("--set", default="expansion")
         s.add_argument("--step", type=int, default=12)
@@ -224,7 +326,8 @@ def main() -> int:
     s.add_argument("--before", default="8a0c28ab", help="source hash prefix before the change")
     s.add_argument("--after", default="6703943e", help="source hash prefix after the change")
     a = p.parse_args()
-    return {"run": cmd_run, "report": cmd_report, "compact": cmd_compact, "speed": cmd_speed}[a.cmd](a)
+    return {"run": cmd_run, "report": cmd_report, "compact": cmd_compact,
+            "pair": cmd_pair, "speed": cmd_speed}[a.cmd](a)
 
 
 if __name__ == "__main__":
