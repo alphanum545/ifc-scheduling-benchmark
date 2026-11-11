@@ -328,6 +328,14 @@ role = "proposed"
 enabled = false
 sources = ["algorithms/dcr_cost", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
 
+[dcr-cost-v3]
+label = "DCR-Cost v3 (+ time-priced candidates, deep polish)"
+module = "algorithms.dcr_cost_v3"
+class = "DCRCostPricedScheduler"
+role = "proposed"
+enabled = false
+sources = ["algorithms/dcr_cost_v3", "algorithms/dcr_cost", "algorithms/dcr_ifc_v1", "algorithms/dcr_ifc_optimized", "algorithms/dcr_ifc", "algorithms/common", "algorithms/__init__.py"]
+
 [cmas]
 label = "CMaS"
 module = "algorithms.paper2_baselines"
