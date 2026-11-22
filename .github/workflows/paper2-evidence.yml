@@ -64,6 +64,13 @@ jobs:
         with:
           name: paper2-protocol
           path: evidence
+      - name: Recover completed cases from a failed job in this run
+        if: github.run_attempt != '1'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: rows-${{ matrix.set }}-${{ matrix.shard }}
+          path: evidence
       - name: Fetch and verify the frozen data
         env:
           GH_TOKEN: ${{ github.token }}
