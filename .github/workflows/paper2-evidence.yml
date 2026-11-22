@@ -1,0 +1,114 @@
+name: DCR-Cost journal evidence
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened]
+    branches: [paper2-dcr-cost-v3]
+    paths: ['.github/workflows/paper2-evidence.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: paper2-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  protocol:
+    if: github.event_name == 'workflow_dispatch' || (github.head_ref == 'paper2-dcr-cost-evidence' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      commit: ${{ steps.rev.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - id: rev
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q -r requirements.txt pytest
+      - name: Check the algorithms, study, and evidence pipeline
+        run: python -m pytest -q tests/test_dcr_cost.py tests/test_dcr_cost_study.py tests/test_paper2_evidence.py
+      - id: plan
+        run: python tools/paper2_evidence.py plan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paper2-protocol
+          path: evidence/protocol.json
+          if-no-files-found: error
+          retention-days: 90
+
+  measure:
+    needs: protocol
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        include: ${{ fromJSON(needs.protocol.outputs.matrix) }}
+    name: ${{ matrix.set }} / ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.protocol.outputs.commit }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: paper2-protocol
+          path: evidence
+      - name: Recover completed cases from a failed job in this run
+        if: github.run_attempt != '1'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: rows-${{ matrix.set }}-${{ matrix.shard }}
+          path: evidence
+      - name: Fetch and verify the frozen data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/data.py fetch --set ${{ matrix.set }} --out data/${{ matrix.set }}
+      - run: python tools/paper2_evidence.py shard ${{ matrix.set }} ${{ matrix.shard }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rows-${{ matrix.set }}-${{ matrix.shard }}
+          path: evidence/rows-*.csv
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 90
+
+  report:
+    needs: [protocol, measure]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.protocol.outputs.commit }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: paper2-protocol
+          path: evidence
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rows-*
+          path: evidence
+          merge-multiple: true
+      - run: python tools/paper2_evidence.py report
+      - run: cat evidence/bundle/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DCR-Cost-journal-evidence
+          path: evidence/bundle/
+          if-no-files-found: error
+          retention-days: 90
