@@ -449,3 +449,93 @@ class = "DCDSScheduler"
 role = "comparator"
 enabled = false
 sources = ["algorithms/dcds.py", "algorithms/common", "algorithms/__init__.py"]
+
+[pacm-s0]
+label = "PACM (seed 0)"
+module = "algorithms.pacm"
+class = "PACMScheduler"
+role = "comparator"
+enabled = false
+params = {seed = 0}
+sources = ["algorithms/pacm.py", "algorithms/common", "algorithms/__init__.py"]
+
+[pacm-s1]
+label = "PACM (seed 1)"
+module = "algorithms.pacm"
+class = "PACMScheduler"
+role = "comparator"
+enabled = false
+params = {seed = 1}
+sources = ["algorithms/pacm.py", "algorithms/common", "algorithms/__init__.py"]
+
+[pacm-s2]
+label = "PACM (seed 2)"
+module = "algorithms.pacm"
+class = "PACMScheduler"
+role = "comparator"
+enabled = false
+params = {seed = 2}
+sources = ["algorithms/pacm.py", "algorithms/common", "algorithms/__init__.py"]
+
+[pacm-s3]
+label = "PACM (seed 3)"
+module = "algorithms.pacm"
+class = "PACMScheduler"
+role = "comparator"
+enabled = false
+params = {seed = 3}
+sources = ["algorithms/pacm.py", "algorithms/common", "algorithms/__init__.py"]
+
+[pacm-s4]
+label = "PACM (seed 4)"
+module = "algorithms.pacm"
+class = "PACMScheduler"
+role = "comparator"
+enabled = false
+params = {seed = 4}
+sources = ["algorithms/pacm.py", "algorithms/common", "algorithms/__init__.py"]
+
+[pacm-s5]
+label = "PACM (seed 5)"
+module = "algorithms.pacm"
+class = "PACMScheduler"
+role = "comparator"
+enabled = false
+params = {seed = 5}
+sources = ["algorithms/pacm.py", "algorithms/common", "algorithms/__init__.py"]
+
+[pacm-s6]
+label = "PACM (seed 6)"
+module = "algorithms.pacm"
+class = "PACMScheduler"
+role = "comparator"
+enabled = false
+params = {seed = 6}
+sources = ["algorithms/pacm.py", "algorithms/common", "algorithms/__init__.py"]
+
+[pacm-s7]
+label = "PACM (seed 7)"
+module = "algorithms.pacm"
+class = "PACMScheduler"
+role = "comparator"
+enabled = false
+params = {seed = 7}
+sources = ["algorithms/pacm.py", "algorithms/common", "algorithms/__init__.py"]
+
+[pacm-s8]
+label = "PACM (seed 8)"
+module = "algorithms.pacm"
+class = "PACMScheduler"
+role = "comparator"
+enabled = false
+params = {seed = 8}
+sources = ["algorithms/pacm.py", "algorithms/common", "algorithms/__init__.py"]
+
+[pacm-s9]
+label = "PACM (seed 9)"
+module = "algorithms.pacm"
+class = "PACMScheduler"
+role = "comparator"
+enabled = false
+params = {seed = 9}
+sources = ["algorithms/pacm.py", "algorithms/common", "algorithms/__init__.py"]
