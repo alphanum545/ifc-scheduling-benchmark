@@ -39,3 +39,14 @@ def test_impossible_deadline_and_repeatable_seed():
     first = PACMScheduler(7).schedule(case)
     assert PACMScheduler(7).schedule(case) == first
     assert not evaluate_decision(case, first).deadline_feasible
+
+
+def test_indegree_term_changes_noncritical_placement():
+    # Task 2 can finish on R01 at 10.05 s. Eq. 19 would give it 10 s,
+    # while Eq. 22 gives about 10.106 s for the in-degrees [0, 1, 1].
+    base = fixture([[1_000_000, 12_000_000, 12_000_000],
+                    [99_000_000, 120_000_000, 120_000_000],
+                    [8_000_000, 9_050_000, 2_000_000]],
+                   [[1, 2, 3], [1, 2, 3], [8, 1, 5]], [(0, 1), (0, 2)])
+    decision = PACMScheduler().schedule(inp(base, 10_000_000))
+    assert decision.resource_assignments["T02"] == "R01"
