@@ -5,13 +5,16 @@ are local candidates. Cloud selection uses real slot availability; the RTC
 bound uses fastest cloud execution. The shared evaluator replays the final
 topological order and mapping. A late schedule counts as a deadline miss.
 """
-from collections import deque
+from collections import Counter, deque
 from functools import lru_cache
 
 from algorithms.common.interface import AlgorithmDecision
 from generator.reference_schedulers import (
-    _candidate_assignment, _commit_assignment, _communication_metrics, _graph,
+    _candidate_assignment, _commit_assignment, _graph,
 )
+
+
+from generator.network import route_metrics
 
 
 class DCDSScheduler:
@@ -30,24 +33,33 @@ class DCDSScheduler:
         cost = inst["compute_cost_ncu"]
 
         @lru_cache(maxsize=None)
+        def route(bits, source, target):
+            return route_metrics(inst["network"], source_tier=source, target_tier=target,
+                                 same_resource=False, data_bits=bits)["communication_time_us"]
+
+        tiers = graph.resource_tiers
+        counts = Counter(tiers[r] for r in local)
+
         def transfer(t, child, r, dest):
-            return _communication_metrics(inst, graph, parent=t, child=child,
-                                         source_resource=r, target_resource=dest)["communication_time_us"]
+            if r == dest:
+                return 0
+            return route(graph.data_bits_by_edge[f"{t}->{child}"], tiers[r], tiers[dest])
 
         # Eq. 11 and 18, scaled to avoid rounding average route times.
         peers = max(1, len(local) - 1)
-        scale = len(local) * peers
         delays = {}
         rank = {}
         rtc = {}
         for t in reversed(graph.topological_order):
             tails = []
             for child in graph.children[t]:
+                bits = graph.data_bits_by_edge[f"{t}->{child}"]
                 delays[t, child] = {
-                    r: sum(transfer(t, child, r, s) for s in local if s != r)
-                    for r in local
+                    src: sum((count - (src == dst)) * route(bits, src, dst)
+                             for dst, count in counts.items()) for src in counts
                 }
-                tails.append(rank[child] + sum(delays[t, child].values()))
+                tails.append(rank[child] + sum(counts[src] * delay
+                                               for src, delay in delays[t, child].items()))
             rank[t] = peers * sum(duration[t][r] for r in local) + max(tails, default=0)
             rtc[t] = min(duration[t][r] for r in cloud) + max(
                 (rtc[c] for c in graph.children[t]), default=0)
@@ -62,7 +74,7 @@ class DCDSScheduler:
 
         def edge_key(a):
             t, r, finish = a["task_id"], a["resource_id"], a["end_us"]
-            late = max(((finish * peers + delays[t, c][r]) * entry - latest[c] * peers
+            late = max(((finish * peers + delays[t, c][tiers[r]]) * entry - latest[c] * peers
                         for c in graph.children[t]), default=(finish - deadline) * peers * entry)
             return max(0, late), cost[t][r], finish, r
 
