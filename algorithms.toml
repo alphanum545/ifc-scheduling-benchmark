@@ -441,3 +441,11 @@ params = { seed = 9 }
 role = "comparator"
 enabled = false
 sources = ["algorithms/paper2_baselines", "algorithms/common", "algorithms/__init__.py"]
+
+[dcds]
+label = "DCDS (fixed pool)"
+module = "algorithms.dcds"
+class = "DCDSScheduler"
+role = "comparator"
+enabled = false
+sources = ["algorithms/dcds.py", "algorithms/common", "algorithms/__init__.py"]
